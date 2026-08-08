@@ -252,3 +252,64 @@ func (db *DB) SearchVerses(ctx context.Context, translationID, query string, lim
 	return results, total, nil
 }
 
+type GenbookEntry struct {
+	ID            string `json:"id"`
+	TranslationID string `json:"translation_id"`
+	Path          string `json:"path"`
+	Title         string `json:"title"`
+	Content       string `json:"content"`
+}
+
+func (db *DB) InsertGenbookEntries(ctx context.Context, translationID string, entries []GenbookEntry) (int64, error) {
+	return db.Pool.CopyFrom(
+		ctx,
+		pgx.Identifier{"genbooks"},
+		[]string{"translation_id", "path", "title", "content"},
+		pgx.CopyFromSlice(len(entries), func(i int) ([]any, error) {
+			e := entries[i]
+			return []any{translationID, e.Path, e.Title, e.Content}, nil
+		}),
+	)
+}
+
+func (db *DB) GetGenbookPaths(ctx context.Context, translationID, parentPath string) ([]GenbookEntry, error) {
+	likeChild := parentPath + "/%"
+	likeGrandchild := parentPath + "/%/%"
+	if parentPath == "/" || parentPath == "" {
+		likeChild = "/%"
+		likeGrandchild = "/%/%"
+	}
+	rows, err := db.Pool.Query(ctx, `
+		SELECT id, translation_id, path, COALESCE(title, ''), content
+		FROM genbooks
+		WHERE translation_id = $1 AND path LIKE $2 AND path NOT LIKE $3
+		ORDER BY path
+	`, translationID, likeChild, likeGrandchild)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	var entries []GenbookEntry
+	for rows.Next() {
+		var e GenbookEntry
+		if err := rows.Scan(&e.ID, &e.TranslationID, &e.Path, &e.Title, &e.Content); err != nil {
+			return nil, err
+		}
+		entries = append(entries, e)
+	}
+	return entries, nil
+}
+
+func (db *DB) GetGenbookEntry(ctx context.Context, translationID, path string) (*GenbookEntry, error) {
+	e := &GenbookEntry{}
+	err := db.Pool.QueryRow(ctx, `
+		SELECT id, translation_id, path, COALESCE(title, ''), content
+		FROM genbooks WHERE translation_id = $1 AND path = $2
+	`, translationID, path).Scan(&e.ID, &e.TranslationID, &e.Path, &e.Title, &e.Content)
+	if err != nil {
+		return nil, err
+	}
+	return e, nil
+}
+

@@ -14,6 +14,7 @@ import (
 	"github.com/gospelfast/gospelfast/internal/api"
 	"github.com/gospelfast/gospelfast/internal/cache"
 	"github.com/gospelfast/gospelfast/internal/db"
+	importpkg "github.com/gospelfast/gospelfast/internal/import"
 	"github.com/gospelfast/gospelfast/internal/web"
 
 	_ "github.com/gospelfast/gospelfast/docs"
@@ -62,11 +63,19 @@ func main() {
 	}
 
 	apiHandler := api.NewHandler(database, c)
-	adminHandler := admin.NewHandler(database, c)
+	adminAPIHandler := admin.NewHandler(database, c)
+
+	pipeline := importpkg.New(database)
+	jobManager := admin.NewJobManager(pipeline)
 
 	webHandler, err := web.NewHandler(database, c, templatesDir)
 	if err != nil {
 		log.Fatalf("web handler: %v", err)
+	}
+
+	adminWebHandler, err := admin.NewWebHandler(database, c, jobManager, templatesDir)
+	if err != nil {
+		log.Fatalf("admin web handler: %v", err)
 	}
 
 	mux := http.NewServeMux()
@@ -88,6 +97,7 @@ func main() {
 	mux.HandleFunc("GET /reader/chapter", webHandler.ReaderChapter)
 	mux.HandleFunc("GET /compare", webHandler.Compare)
 	mux.HandleFunc("GET /compare/results", webHandler.CompareResults)
+	mux.HandleFunc("GET /genbook", webHandler.Genbook)
 
 	// Public API
 	mux.HandleFunc("GET /api/translations", apiHandler.ListTranslations)
@@ -96,12 +106,17 @@ func main() {
 	mux.HandleFunc("GET /api/chapters/{t}/{chapter}", apiHandler.GetChapter)
 	mux.HandleFunc("GET /api/verses", apiHandler.GetVerses)
 	mux.HandleFunc("GET /api/search", apiHandler.Search)
+	mux.HandleFunc("GET /api/genbooks", apiHandler.ListGenbooks)
+	mux.HandleFunc("GET /api/genbooks/entry", apiHandler.GetGenbookEntry)
+
+	// Admin pages
+	mux.Handle("GET /admin", admin.AuthMiddleware(http.HandlerFunc(adminWebHandler.Dashboard)))
+	mux.Handle("GET /admin/api/imports/{id}", admin.AuthMiddleware(http.HandlerFunc(adminWebHandler.ImportStatus)))
+	mux.Handle("POST /admin/api/imports", admin.AuthMiddleware(http.HandlerFunc(adminWebHandler.StartImport)))
 
 	// Admin API (basic auth)
-	adminAuth := admin.AuthMiddleware(http.DefaultServeMux)
-	_ = adminAuth
-	mux.Handle("GET /admin/api/translations", admin.AuthMiddleware(http.HandlerFunc(adminHandler.ListTranslations)))
-	mux.Handle("DELETE /admin/api/translations/{id}", admin.AuthMiddleware(http.HandlerFunc(adminHandler.DeleteTranslation)))
+	mux.Handle("GET /admin/api/translations", admin.AuthMiddleware(http.HandlerFunc(adminAPIHandler.ListTranslations)))
+	mux.Handle("DELETE /admin/api/translations/{id}", admin.AuthMiddleware(http.HandlerFunc(adminAPIHandler.DeleteTranslation)))
 
 	// Swagger
 	mux.Handle("GET /swagger/", httpSwagger.Handler(

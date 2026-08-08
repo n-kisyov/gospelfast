@@ -11,12 +11,14 @@ import (
 	"path/filepath"
 	"regexp"
 	"strings"
+	"unicode/utf8"
 )
 
 var tagRe = regexp.MustCompile(`<[^>]*>`)
 
 type ModuleMeta struct {
 	ModName       string
+	ModDrv        string
 	Versification string
 	Lang          string
 	Description   string
@@ -54,11 +56,29 @@ func ConvertRawzip(sourceURL, tmpDir string) (string, *ModuleMeta, error) {
 		return "", nil, fmt.Errorf("could not determine module name")
 	}
 
+	isGenbook := meta.ModDrv == "RawGenBook"
+
+	if !isGenbook && meta.ModDrv != "" &&
+		meta.ModDrv != "RawText" && meta.ModDrv != "RawText4" &&
+		meta.ModDrv != "zText" && meta.ModDrv != "zText4" &&
+		meta.ModDrv != "RawCom" && meta.ModDrv != "RawCom4" &&
+		meta.ModDrv != "zCom" && meta.ModDrv != "zCom4" {
+		return "", nil, fmt.Errorf("unsupported module type %q — only Bible texts, commentaries, and general books are supported", meta.ModDrv)
+	}
+
 	cmd := exec.Command("mod2imp", modName)
 	cmd.Env = append(os.Environ(), "SWORD_PATH="+extractDir)
 	out, err := cmd.CombinedOutput()
 	if err != nil {
 		return "", nil, fmt.Errorf("mod2imp: %s: %w", string(out), err)
+	}
+
+	if isGenbook {
+		impPath := filepath.Join(tmpDir, modName+".imp")
+		if err := os.WriteFile(impPath, out, 0644); err != nil {
+			return "", nil, err
+		}
+		return impPath, meta, nil
 	}
 
 	vplPath := filepath.Join(tmpDir, modName+".vpl")
@@ -99,6 +119,7 @@ func impToVPL(data []byte, outPath string) error {
 		}
 
 		text := tagRe.ReplaceAllString(trimmed, "")
+		text = cleanUTF8(text)
 		text = strings.TrimSpace(text)
 		if text == "" {
 			continue
@@ -196,6 +217,9 @@ func parseConfFile(path string) (*ModuleMeta, error) {
 			modName = line[1 : len(line)-1]
 			meta.ModName = modName
 		}
+		if strings.HasPrefix(line, "ModDrv=") {
+			meta.ModDrv = strings.TrimSpace(line[len("ModDrv="):])
+		}
 		if strings.HasPrefix(line, "Versification=") {
 			meta.Versification = strings.TrimSpace(line[len("Versification="):])
 		}
@@ -233,6 +257,83 @@ func findModName(extractDir string) string {
 					}
 				}
 			}
+		}
+	}
+	return ""
+}
+
+func cleanUTF8(s string) string {
+	if utf8.ValidString(s) {
+		return s
+	}
+	return strings.ToValidUTF8(s, " ")
+}
+
+type GenbookEntry struct {
+	Path    string
+	Title   string
+	Content string
+}
+
+func ParseGenbookIMP(data []byte) []GenbookEntry {
+	var entries []GenbookEntry
+	scanner := bufio.NewScanner(strings.NewReader(string(data)))
+	scanner.Buffer(make([]byte, 1024*1024), 1024*1024)
+
+	var currentEntry *GenbookEntry
+	var contentBuf strings.Builder
+
+	for scanner.Scan() {
+		line := scanner.Text()
+		trimmed := strings.TrimSpace(line)
+
+		if strings.HasPrefix(trimmed, "$$$") {
+			if currentEntry != nil {
+				currentEntry.Content = cleanUTF8(strings.TrimSpace(contentBuf.String()))
+				currentEntry.Content = tagRe.ReplaceAllString(currentEntry.Content, "")
+				currentEntry.Content = strings.TrimSpace(currentEntry.Content)
+				if currentEntry.Content != "" {
+					entries = append(entries, *currentEntry)
+				}
+			}
+			currentEntry = &GenbookEntry{Path: strings.TrimSpace(trimmed[3:])}
+			contentBuf.Reset()
+			continue
+		}
+
+		if currentEntry != nil {
+			contentBuf.WriteString(line)
+			contentBuf.WriteString("\n")
+		}
+	}
+
+	if currentEntry != nil {
+		currentEntry.Content = cleanUTF8(strings.TrimSpace(contentBuf.String()))
+		currentEntry.Content = tagRe.ReplaceAllString(currentEntry.Content, "")
+		currentEntry.Content = strings.TrimSpace(currentEntry.Content)
+		if currentEntry.Content != "" {
+			entries = append(entries, *currentEntry)
+		}
+	}
+
+	for i := range entries {
+		entries[i].Title = extractGenbookTitle(entries[i].Content)
+		if entries[i].Title != "" {
+			entries[i].Content = strings.TrimSpace(strings.TrimPrefix(entries[i].Content,
+				strings.Join(strings.Fields(entries[i].Title), " ")))
+		}
+	}
+
+	return entries
+}
+
+func extractGenbookTitle(content string) string {
+	if idx := strings.Index(content, "<title>"); idx != -1 {
+		end := strings.Index(content[idx:], "</title>")
+		if end != -1 {
+			title := content[idx+7 : idx+end]
+			title = tagRe.ReplaceAllString(title, "")
+			return strings.TrimSpace(title)
 		}
 	}
 	return ""

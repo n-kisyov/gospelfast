@@ -1,0 +1,25 @@
+<div class="bg-white border border-gray-200 rounded-lg p-4" id="job-{{.Job.ID}}">
+    <div class="flex items-center justify-between mb-2">
+        <div class="font-medium text-sm">{{.Job.Name}}</div>
+        <div class="text-xs px-2 py-0.5 rounded-full 
+            {{if eq .Job.Status "complete"}}bg-green-50 text-green-700
+            {{else if eq .Job.Status "failed"}}bg-red-50 text-red-700
+            {{else if eq .Job.Status "processing"}}bg-blue-50 text-blue-700
+            {{else}}bg-gray-50 text-gray-600{{end}}">
+            {{.Job.Status}}
+        </div>
+    </div>
+    {{if eq .Job.Status "processing"}}
+    <div class="w-full bg-gray-200 rounded-full h-2 mb-1">
+        <div class="bg-blue-500 h-2 rounded-full transition-all" style="width: {{.Percent}}%"></div>
+    </div>
+    <div class="text-xs text-gray-500">{{.Job.Stage}} {{.Job.Progress}}/{{.Job.Total}}</div>
+    <div hx-get="/admin/api/imports/{{.Job.ID}}" hx-trigger="every 2s" hx-target="#job-{{.Job.ID}}" hx-swap="outerHTML"></div>
+    {{end}}
+    {{if eq .Job.Status "failed"}}
+    <div class="text-xs text-red-600 mt-1">{{.Job.Error}}</div>
+    {{end}}
+    {{if eq .Job.Status "complete"}}
+    <div class="text-xs text-green-600 mt-1">Import complete &mdash; <a href="/reader?t={{.Job.Name}}" class="text-blue-600 hover:underline">open in reader</a></div>
+    {{end}}
+</div>

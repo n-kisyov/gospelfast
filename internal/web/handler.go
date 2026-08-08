@@ -62,6 +62,7 @@ func NewHandler(d *db.DB, c *cache.Cache, templatesDir string) (*Handler, error)
 		"compare.html":          {},
 		"compare_result.html":   {},
 		"search.html":           {},
+		"genbook.html":          {},
 	}
 
 	for name, deps := range pageDeps {
@@ -134,7 +135,7 @@ type searchResultItem struct {
 	BookShortName string
 	Chapter       int
 	Verse         int
-	Snippet       string
+	Snippet       template.HTML
 	Rank          float64
 }
 
@@ -181,7 +182,7 @@ func (h *Handler) Search(w http.ResponseWriter, r *http.Request) {
 						BookShortName: r.BookShortName,
 						Chapter:       r.Chapter,
 						Verse:         r.Verse,
-						Snippet:       r.Snippet,
+						Snippet:       template.HTML(r.Snippet),
 						Rank:          r.Rank,
 					})
 				}
@@ -237,18 +238,20 @@ func (h *Handler) Reader(w http.ResponseWriter, r *http.Request) {
 
 	trans, err := h.DB.GetTranslationByShortName(ctx, data.Selected)
 	if err == nil {
-		books, _ := h.DB.GetBooksByVersification(ctx, trans.VersificationID)
-		for _, b := range books {
-			data.Books = append(data.Books, bookItem{ShortName: b.ShortName, Name: b.Name, ChapterCount: b.ChapterCount})
-		}
+		books, err := h.DB.GetBooksByVersification(ctx, trans.VersificationID)
+		if err == nil && len(books) > 0 {
+			for _, b := range books {
+				data.Books = append(data.Books, bookItem{ShortName: b.ShortName, Name: b.Name, ChapterCount: b.ChapterCount})
+			}
 
-		book, _ := h.DB.GetBookByShortName(ctx, trans.VersificationID, data.BookShort)
-		if book != nil {
-			data.BookName = book.Name
-			data.ChapterCount = book.ChapterCount
-			verses, _ := h.DB.GetChapterVerses(ctx, trans.ID, book.ID, data.Chapter)
-			for _, v := range verses {
-				data.Verses = append(data.Verses, verseItem{Verse: v.Verse, Text: v.Text})
+			book, _ := h.DB.GetBookByShortName(ctx, trans.VersificationID, data.BookShort)
+			if book != nil {
+				data.BookName = book.Name
+				data.ChapterCount = book.ChapterCount
+				verses, _ := h.DB.GetChapterVerses(ctx, trans.ID, book.ID, data.Chapter)
+				for _, v := range verses {
+					data.Verses = append(data.Verses, verseItem{Verse: v.Verse, Text: v.Text})
+				}
 			}
 		}
 	}
@@ -392,4 +395,77 @@ func fetchVerseText(ctx context.Context, database *db.DB, shortName string, ref 
 		return "", false
 	}
 	return verse.Text, true
+}
+
+type genbookPageData struct {
+	Translations []translationItem
+	Selected     string
+	Title        string
+	CurrentTitle string
+	CurrentPath  string
+	ParentPath   string
+	Content      string
+	TOC          []genbookTOCEntry
+}
+
+type genbookTOCEntry struct {
+	Path  string
+	Title string
+}
+
+func (h *Handler) Genbook(w http.ResponseWriter, r *http.Request) {
+	ctx := r.Context()
+	data := genbookPageData{Selected: "ENOCH", CurrentPath: "/"}
+
+	if t := r.URL.Query().Get("t"); t != "" {
+		data.Selected = t
+	}
+	if p := r.URL.Query().Get("path"); p != "" {
+		data.CurrentPath = p
+	}
+
+	translations, err := h.DB.ListTranslations(ctx)
+	if err == nil {
+		for _, t := range translations {
+			data.Translations = append(data.Translations, translationItem{
+				ID: t.ID, ShortName: t.ShortName, FullName: t.FullName,
+			})
+		}
+	}
+
+	trans, err := h.DB.GetTranslationByShortName(ctx, data.Selected)
+	if err != nil {
+		h.renderPage(w, "genbook.html", data, "Gospelfast — Book")
+		return
+	}
+
+	data.Title = trans.FullName
+
+	tocParent := data.CurrentPath
+	if tocParent == "" {
+		tocParent = "/"
+	}
+
+	entries, err := h.DB.GetGenbookPaths(ctx, trans.ID, tocParent)
+	if err == nil {
+		for _, e := range entries {
+			data.TOC = append(data.TOC, genbookTOCEntry{Path: e.Path, Title: e.Title})
+		}
+	}
+
+	if lastSlash := strings.LastIndex(data.CurrentPath, "/"); lastSlash > 0 {
+		data.ParentPath = data.CurrentPath[:lastSlash]
+	} else if data.CurrentPath != "/" && data.CurrentPath != "" {
+		data.ParentPath = "/"
+	}
+
+	if data.CurrentPath != "/" && data.CurrentPath != "" {
+		entry, err := h.DB.GetGenbookEntry(ctx, trans.ID, data.CurrentPath)
+		if err == nil {
+			data.CurrentTitle = entry.Title
+			data.Content = entry.Content
+		}
+	}
+
+	h.renderPage(w, "genbook.html", data, "Gospelfast — "+data.Selected)
 }

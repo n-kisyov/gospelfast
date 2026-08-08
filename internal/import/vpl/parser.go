@@ -5,6 +5,7 @@ import (
 	"io"
 	"regexp"
 	"strings"
+	"unicode/utf8"
 
 	"github.com/gospelfast/gospelfast/internal/bible"
 )
@@ -52,6 +53,7 @@ func Parse(r io.Reader) ([]VerseRec, error) {
 		}
 		text := strings.TrimSpace(line[textStart:])
 		text = tagRe.ReplaceAllString(text, "")
+		text = cleanUTF8(text)
 		text = strings.TrimSpace(text)
 		if text == "" {
 			continue
@@ -66,4 +68,11 @@ func Parse(r io.Reader) ([]VerseRec, error) {
 	}
 
 	return verses, scanner.Err()
+}
+
+func cleanUTF8(s string) string {
+	if utf8.ValidString(s) {
+		return s
+	}
+	return strings.ToValidUTF8(s, " ")
 }

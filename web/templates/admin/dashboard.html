@@ -1,0 +1,76 @@
+<div class="max-w-4xl mx-auto">
+    <h1 class="text-2xl font-bold mb-6">Admin Dashboard</h1>
+
+    <div class="bg-white border border-gray-200 rounded-lg p-6 mb-8">
+        <h2 class="text-lg font-semibold mb-4">Import New Translation</h2>
+        <form hx-post="/admin/api/imports" hx-target="#import-results" hx-swap="afterbegin" class="space-y-3">
+            <div>
+                <label class="block text-sm font-medium text-gray-600 mb-1">Source URL</label>
+                <input type="url" name="source" placeholder="https://www.crosswire.org/.../KJVA.zip"
+                       required
+                       class="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500">
+            </div>
+            <div class="flex gap-3">
+                <div class="flex-1">
+                    <label class="block text-sm font-medium text-gray-600 mb-1">Translation Name (optional)</label>
+                    <input type="text" name="name" placeholder="e.g. KJVA"
+                           class="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm">
+                </div>
+                <div>
+                    <label class="block text-sm font-medium text-gray-600 mb-1">Format</label>
+                    <select name="format" class="border border-gray-300 rounded-lg px-3 py-2 text-sm bg-white">
+                        <option value="rawzip">SWORD Rawzip</option>
+                        <option value="osis">OSIS XML</option>
+                        <option value="vpl">VPL Text</option>
+                    </select>
+                </div>
+                <div class="flex items-end">
+                    <button type="submit" class="bg-blue-600 text-white px-5 py-2 rounded-lg text-sm font-medium hover:bg-blue-700 transition h-[38px]">
+                        Start Import
+                    </button>
+                </div>
+            </div>
+        </form>
+    </div>
+
+    <div id="import-results" class="space-y-3 mb-8"></div>
+
+    <h2 class="text-lg font-semibold mb-4">Translations</h2>
+    <div class="bg-white border border-gray-200 rounded-lg overflow-hidden">
+        <table class="w-full text-sm">
+            <thead class="bg-gray-50 border-b">
+                <tr>
+                    <th class="text-left px-4 py-2 font-medium text-gray-600">Name</th>
+                    <th class="text-left px-4 py-2 font-medium text-gray-600">Full Name</th>
+                    <th class="text-left px-4 py-2 font-medium text-gray-600">Lang</th>
+                    <th class="text-right px-4 py-2 font-medium text-gray-600">Verses</th>
+                    <th class="text-left px-4 py-2 font-medium text-gray-600">Imported</th>
+                    <th class="px-4 py-2"></th>
+                </tr>
+            </thead>
+            <tbody>
+                {{range .Translations}}
+                <tr class="border-b last:border-0">
+                    <td class="px-4 py-2 font-medium">{{.ShortName}}</td>
+                    <td class="px-4 py-2 text-gray-600">{{.FullName}}</td>
+                    <td class="px-4 py-2 text-gray-500">{{.Language}}</td>
+                    <td class="px-4 py-2 text-right tabular-nums">{{.VerseCount}}</td>
+                    <td class="px-4 py-2 text-gray-500">{{.CreatedAt}}</td>
+                    <td class="px-4 py-2">
+                        <button hx-delete="/admin/api/translations/{{.ID}}"
+                                hx-confirm="Delete {{.ShortName}}?"
+                                hx-target="closest tr" hx-swap="outerHTML"
+                                class="text-red-500 hover:text-red-700 text-xs font-medium">
+                            Delete
+                        </button>
+                    </td>
+                </tr>
+                {{else}}
+                <tr>
+                    <td colspan="6" class="px-4 py-8 text-center text-gray-400">No translations imported yet.</td>
+                </tr>
+                {{end}}
+            </tbody>
+        </table>
+    </div>
+</div>

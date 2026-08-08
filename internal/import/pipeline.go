@@ -3,6 +3,8 @@ package importer
 import (
 	"context"
 	"fmt"
+	"io"
+	"net/http"
 	"os"
 	"path/filepath"
 	"strings"
@@ -40,6 +42,39 @@ func (p *Pipeline) ImportFile(ctx context.Context, source, name string, format F
 	}
 	defer os.RemoveAll(tmpDir)
 
+	if strings.HasPrefix(source, "http://") || strings.HasPrefix(source, "https://") {
+		downloaded := filepath.Join(tmpDir, "download")
+		if progress != nil {
+			progress("downloading "+source, 0, 0)
+		}
+		client := &http.Client{Timeout: 60 * time.Second}
+		req, err := http.NewRequestWithContext(ctx, "GET", source, nil)
+		if err != nil {
+			return fmt.Errorf("download: %w", err)
+		}
+		resp, err := client.Do(req)
+		if err != nil {
+			return fmt.Errorf("download: %w", err)
+		}
+		defer resp.Body.Close()
+		if resp.StatusCode != http.StatusOK {
+			return fmt.Errorf("download: HTTP %d", resp.StatusCode)
+		}
+		f, err := os.Create(downloaded)
+		if err != nil {
+			return err
+		}
+		if _, err := io.Copy(f, resp.Body); err != nil {
+			f.Close()
+			return err
+		}
+		f.Close()
+		source = downloaded
+		if progress != nil {
+			progress("download complete", 100, 100)
+		}
+	}
+
 	versification := "KJV"
 
 	if format == FormatRawzip {
@@ -47,7 +82,7 @@ func (p *Pipeline) ImportFile(ctx context.Context, source, name string, format F
 			progress("downloading and converting rawzip", 0, 0)
 		}
 		var meta *sword.ModuleMeta
-		xmlPath, meta, err := sword.ConvertRawzip(source, tmpDir)
+		convertedPath, meta, err := sword.ConvertRawzip(source, tmpDir)
 		if err != nil {
 			return fmt.Errorf("rawzip conversion: %w", err)
 		}
@@ -63,9 +98,14 @@ func (p *Pipeline) ImportFile(ctx context.Context, source, name string, format F
 			name = filepath.Base(strings.TrimSuffix(source, ".zip"))
 		}
 		if progress != nil {
-			progress("rawzip converted to VPL", 100, 100)
+			progress("rawzip converted", 100, 100)
 		}
-		source = xmlPath
+
+		if meta != nil && meta.ModDrv == "RawGenBook" {
+			return p.importGenbook(ctx, convertedPath, name, progress)
+		}
+
+		source = convertedPath
 		format = FormatVPL
 	}
 
@@ -332,6 +372,59 @@ func (p *Pipeline) importVPL(ctx context.Context, path string, name string, vers
 		}
 	}
 
+	return nil
+}
+
+func (p *Pipeline) importGenbook(ctx context.Context, impPath, name string, progress ProgressFn) error {
+	data, err := os.ReadFile(impPath)
+	if err != nil {
+		return err
+	}
+
+	entries := sword.ParseGenbookIMP(data)
+	if len(entries) == 0 {
+		return fmt.Errorf("no entries found in genbook module")
+	}
+
+	if progress != nil {
+		progress("parsed genbook", len(entries), len(entries))
+	}
+
+	_ = p.DB.DeleteTranslationByShortName(ctx, strings.ToUpper(name))
+
+	versID, err := p.DB.CreateVersification(ctx, "genbook")
+	if err != nil {
+		return err
+	}
+
+	trans := &bible.Translation{
+		ShortName:       strings.ToUpper(name),
+		FullName:        name,
+		Language:        "en",
+		VersificationID: versID,
+		CreatedAt:       time.Now(),
+		UpdatedAt:       time.Now(),
+	}
+
+	if err := p.DB.CreateTranslation(ctx, trans); err != nil {
+		return fmt.Errorf("create translation: %w", err)
+	}
+
+	dbEntries := make([]db.GenbookEntry, len(entries))
+	for i, e := range entries {
+		dbEntries[i] = db.GenbookEntry{
+			Path:    e.Path,
+			Title:   e.Title,
+			Content: e.Content,
+		}
+	}
+
+	inserted, err := p.DB.InsertGenbookEntries(ctx, trans.ID, dbEntries)
+	if err != nil {
+		return fmt.Errorf("insert genbook entries: %w", err)
+	}
+
+	fmt.Printf("Imported genbook %q: %d entries\n", name, inserted)
 	return nil
 }
 

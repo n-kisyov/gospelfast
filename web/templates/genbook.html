@@ -1,0 +1,39 @@
+<div class="max-w-3xl mx-auto">
+    <h1 class="text-2xl font-bold mb-6">{{.Title}}</h1>
+
+    <div class="flex gap-6">
+        <aside class="w-64 flex-shrink-0">
+            <select class="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm mb-4 bg-white"
+                    onchange="window.location='/genbook?t='+this.value">
+                {{range .Translations}}
+                <option value="{{.ShortName}}" {{if eq .ShortName $.Selected}}selected{{end}}>{{.ShortName}}</option>
+                {{end}}
+            </select>
+            {{if .ParentPath}}
+            <a href="/genbook?t={{$.Selected}}&path={{.ParentPath}}"
+               class="block text-sm text-gray-500 hover:text-gray-700 mb-2">&larr; Back</a>
+            {{end}}
+            <nav class="space-y-0.5 max-h-[calc(100vh-300px)] overflow-y-auto text-sm">
+                {{range .TOC}}
+                <a href="/genbook?t={{$.Selected}}&path={{.Path}}"
+                   class="block px-2 py-1 rounded {{if eq .Path $.CurrentPath}}bg-blue-50 text-blue-700 font-medium{{else}}text-gray-600 hover:bg-gray-100{{end}}">
+                    {{if .Title}}{{.Title}}{{else}}{{.Path}}{{end}}
+                </a>
+                {{else}}
+                <p class="text-gray-400 text-xs px-2">(empty)</p>
+                {{end}}
+            </nav>
+        </aside>
+
+        <div class="flex-1 min-w-0">
+            <div class="bg-white border border-gray-200 rounded-lg p-6">
+                {{if .CurrentTitle}}
+                <h2 class="text-lg font-semibold mb-4">{{.CurrentTitle}}</h2>
+                {{end}}
+                <div class="text-sm text-gray-800 leading-relaxed whitespace-pre-wrap">
+                    {{.Content}}
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
