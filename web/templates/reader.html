@@ -1,0 +1,25 @@
+<div class="flex gap-6">
+    <aside class="w-52 flex-shrink-0">
+        <select id="trans-picker" class="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm mb-4 bg-white"
+                onchange="window.location='/reader?t='+this.value+'&book={{.BookShort}}&chapter={{.Chapter}}'">
+            {{range .Translations}}
+            <option value="{{.ShortName}}" {{if eq .ShortName $.Selected}}selected{{end}}>{{.ShortName}}</option>
+            {{end}}
+        </select>
+
+        <nav class="space-y-0.5 max-h-[calc(100vh-250px)] overflow-y-auto">
+            {{range .Books}}
+            <a href="/reader?t={{$.Selected}}&book={{.ShortName}}&chapter=1"
+               class="block text-sm px-2 py-1 rounded {{if eq .ShortName $.BookShort}}bg-blue-50 text-blue-700 font-medium{{else}}text-gray-600 hover:bg-gray-100{{end}}">
+                {{.Name}}
+            </a>
+            {{end}}
+        </nav>
+    </aside>
+
+    <div class="flex-1 min-w-0">
+        <div id="chapter-area">
+            {{template "reader_chapter.html" .}}
+        </div>
+    </div>
+</div>

@@ -1,0 +1,25 @@
+<div class="max-w-2xl mx-auto">
+    <h1 class="text-3xl font-bold text-center mb-8">Search the Scriptures</h1>
+
+    <form hx-get="/search" hx-target="#results" hx-indicator="#spinner" class="flex gap-3 mb-8">
+        <select name="t" class="border border-gray-300 rounded-lg px-3 py-2 text-sm bg-white">
+            {{range .Translations}}
+            <option value="{{.ShortName}}" {{if eq .ShortName $.Selected}}selected{{end}}>{{.ShortName}}</option>
+            {{end}}
+        </select>
+        <input type="search" name="q" placeholder="Search for verses, phrases, or words..."
+               class="flex-1 border border-gray-300 rounded-lg px-4 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+               autofocus autocomplete="off">
+        <button type="submit" class="bg-blue-600 text-white px-5 py-2 rounded-lg text-sm font-medium hover:bg-blue-700 transition">
+            Search
+        </button>
+    </form>
+
+    <div id="spinner" class="htmx-indicator text-center text-gray-400 py-8">
+        <div class="animate-pulse">Searching...</div>
+    </div>
+
+    <div id="results">
+        {{template "search.html" .}}
+    </div>
+</div>

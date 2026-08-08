@@ -1,0 +1,28 @@
+<div class="flex items-center gap-2 mb-6 flex-wrap">
+    <h2 class="text-xl font-semibold">{{.BookName}}</h2>
+    {{if gt .Chapter 1}}
+    <a href="/reader?t={{$.Selected}}&book={{.BookShort}}&chapter={{sub .Chapter 1}}"
+       class="text-xs bg-gray-100 px-2 py-1 rounded hover:bg-gray-200">&larr; Prev</a>
+    {{end}}
+    <form method="get" action="/reader" class="inline-flex items-center gap-1">
+        <input type="hidden" name="t" value="{{$.Selected}}">
+        <input type="hidden" name="book" value="{{.BookShort}}">
+        <input type="number" name="chapter" value="{{.Chapter}}" min="1" max="{{.ChapterCount}}"
+               class="border border-gray-300 rounded px-2 py-1 text-sm w-16 text-center">
+        <span class="text-xs text-gray-400">/ {{.ChapterCount}}</span>
+        <button type="submit" class="text-xs bg-blue-50 text-blue-600 px-2 py-1 rounded hover:bg-blue-100">Go</button>
+    </form>
+    {{if lt .Chapter .ChapterCount}}
+    <a href="/reader?t={{$.Selected}}&book={{.BookShort}}&chapter={{add .Chapter 1}}"
+       class="text-xs bg-gray-100 px-2 py-1 rounded hover:bg-gray-200">Next &rarr;</a>
+    {{end}}
+</div>
+
+<div class="bg-white border border-gray-200 rounded-lg p-6">
+    {{range .Verses}}
+    <div class="flex gap-3 py-1 border-b border-gray-50 last:border-0">
+        <span class="text-xs font-medium text-blue-500 w-6 flex-shrink-0 text-right">{{.Verse}}</span>
+        <p class="text-sm text-gray-800 leading-relaxed">{{.Text}}</p>
+    </div>
+    {{end}}
+</div>

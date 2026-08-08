@@ -1,0 +1,49 @@
+<div class="max-w-4xl mx-auto">
+    <h1 class="text-2xl font-bold mb-6">Compare Translations</h1>
+
+    <div class="flex gap-3 mb-6 flex-wrap items-end">
+        <div>
+            <label class="block text-xs font-medium text-gray-500 mb-1">Reference</label>
+            <input type="text" id="ref" placeholder="John 3:16" value="John 3:16"
+                   class="border border-gray-300 rounded-lg px-3 py-2 text-sm w-36">
+        </div>
+        <div>
+            <label class="block text-xs font-medium text-gray-500 mb-1">Translation A</label>
+            <select id="trans-a" class="border border-gray-300 rounded-lg px-3 py-2 text-sm bg-white">
+                {{range .Translations}}
+                <option value="{{.ShortName}}">{{.ShortName}}</option>
+                {{end}}
+            </select>
+        </div>
+        <div>
+            <label class="block text-xs font-medium text-gray-500 mb-1">Translation B</label>
+            <select id="trans-b" class="border border-gray-300 rounded-lg px-3 py-2 text-sm bg-white">
+                {{range $i, $t := .Translations}}
+                <option value="{{$t.ShortName}}" {{if eq $i 1}}selected{{end}}>{{$t.ShortName}}</option>
+                {{end}}
+            </select>
+        </div>
+        <button onclick="compareVerses()"
+                class="bg-blue-600 text-white px-5 py-2 rounded-lg text-sm font-medium hover:bg-blue-700 transition h-[38px]">
+            Compare
+        </button>
+    </div>
+
+    <div id="compare-result" class="space-y-4">
+        <p class="text-gray-400 text-center py-8">Enter a reference and select two translations to compare.</p>
+    </div>
+</div>
+
+<script>
+function compareVerses() {
+    var ref = document.getElementById('ref').value;
+    var a = document.getElementById('trans-a').value;
+    var b = document.getElementById('trans-b').value;
+    var url = '/compare/results?ref=' + encodeURIComponent(ref) + '&a=' + a + '&b=' + b;
+    fetch(url)
+        .then(r => r.text())
+        .then(html => {
+            document.getElementById('compare-result').innerHTML = html;
+        });
+}
+</script>

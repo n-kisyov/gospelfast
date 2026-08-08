@@ -1,0 +1,22 @@
+{{if .Query}}
+    <p class="text-sm text-gray-500 mb-4">{{.Total}} results for <strong>{{.Query}}</strong>{{if gt .Total 0}} — page {{.Page}}{{end}}</p>
+    <div class="space-y-4">
+    {{range .Results}}
+        <div class="bg-white border border-gray-200 rounded-lg p-4 hover:border-blue-300 transition">
+            <div class="text-xs font-semibold text-blue-600 mb-1">{{.BookShortName}} {{.Chapter}}:{{.Verse}}</div>
+            <div class="text-sm text-gray-800 leading-relaxed">{{.Snippet}}</div>
+        </div>
+    {{else}}
+        <p class="text-gray-400 text-center py-8">No results found.</p>
+    {{end}}
+    </div>
+    {{if and (gt .Total 0) (gt .NextPage 0)}}
+    <div class="text-center mt-6" id="load-more">
+        <button hx-get="/search?q={{.Query}}&t={{.Selected}}&page={{.NextPage}}"
+                hx-target="#load-more" hx-swap="outerHTML"
+                class="text-sm text-blue-600 hover:text-blue-800 font-medium">
+            Load more results
+        </button>
+    </div>
+    {{end}}
+{{end}}
