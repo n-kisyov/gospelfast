@@ -9,8 +9,11 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"regexp"
 	"strings"
 )
+
+var tagRe = regexp.MustCompile(`<[^>]*>`)
 
 type ModuleMeta struct {
 	ModName       string
@@ -95,7 +98,13 @@ func impToVPL(data []byte, outPath string) error {
 			continue
 		}
 
-		fmt.Fprintf(w, "%s %s\n", currentRef, trimmed)
+		text := tagRe.ReplaceAllString(trimmed, "")
+		text = strings.TrimSpace(text)
+		if text == "" {
+			continue
+		}
+
+		fmt.Fprintf(w, "%s %s\n", currentRef, text)
 	}
 
 	w.Flush()

@@ -14,21 +14,23 @@ import (
 	"github.com/gospelfast/gospelfast/internal/api"
 	"github.com/gospelfast/gospelfast/internal/cache"
 	"github.com/gospelfast/gospelfast/internal/db"
+	"github.com/gospelfast/gospelfast/internal/web"
 
 	_ "github.com/gospelfast/gospelfast/docs"
 	httpSwagger "github.com/swaggo/http-swagger/v2"
 )
 
 var (
-	dbURL    = envOrDefault("DATABASE_URL", "postgres://gospelfast:gospelfast@localhost:5432/gospelfast?sslmode=disable")
-	redisURL = envOrDefault("REDIS_URL", "localhost:6379")
-	port     = envOrDefault("PORT", "8080")
+	dbURL        = envOrDefault("DATABASE_URL", "postgres://gospelfast:gospelfast@localhost:5432/gospelfast?sslmode=disable")
+	redisURL     = envOrDefault("REDIS_URL", "localhost:6379")
+	port         = envOrDefault("PORT", "8080")
+	templatesDir = envOrDefault("TEMPLATES_DIR", "web/templates")
+	staticDir    = envOrDefault("STATIC_DIR", "web/static")
 )
 
 // @title           Gospelfast API
 // @version         1.0
 // @description     Fast full-text search Bible API
-// @host            localhost:8080
 // @BasePath        /
 func main() {
 	ctx, cancel := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
@@ -62,13 +64,30 @@ func main() {
 	apiHandler := api.NewHandler(database, c)
 	adminHandler := admin.NewHandler(database, c)
 
+	webHandler, err := web.NewHandler(database, c, templatesDir)
+	if err != nil {
+		log.Fatalf("web handler: %v", err)
+	}
+
 	mux := http.NewServeMux()
+
+	// Static files
+	mux.Handle("GET /static/", http.StripPrefix("/static/",
+		http.FileServer(http.Dir(staticDir))))
 
 	// Health
 	mux.HandleFunc("GET /health", func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusOK)
 		fmt.Fprintln(w, "OK")
 	})
+
+	// Web pages
+	mux.HandleFunc("GET /", webHandler.Home)
+	mux.HandleFunc("GET /search", webHandler.Search)
+	mux.HandleFunc("GET /reader", webHandler.Reader)
+	mux.HandleFunc("GET /reader/chapter", webHandler.ReaderChapter)
+	mux.HandleFunc("GET /compare", webHandler.Compare)
+	mux.HandleFunc("GET /compare/results", webHandler.CompareResults)
 
 	// Public API
 	mux.HandleFunc("GET /api/translations", apiHandler.ListTranslations)
@@ -79,10 +98,10 @@ func main() {
 	mux.HandleFunc("GET /api/search", apiHandler.Search)
 
 	// Admin API (basic auth)
-	adminMux := http.NewServeMux()
-	adminMux.HandleFunc("GET /admin/api/translations", adminHandler.ListTranslations)
-	adminMux.HandleFunc("DELETE /admin/api/translations/{id}", adminHandler.DeleteTranslation)
-	mux.Handle("/admin/", admin.AuthMiddleware(adminMux))
+	adminAuth := admin.AuthMiddleware(http.DefaultServeMux)
+	_ = adminAuth
+	mux.Handle("GET /admin/api/translations", admin.AuthMiddleware(http.HandlerFunc(adminHandler.ListTranslations)))
+	mux.Handle("DELETE /admin/api/translations/{id}", admin.AuthMiddleware(http.HandlerFunc(adminHandler.DeleteTranslation)))
 
 	// Swagger
 	mux.Handle("GET /swagger/", httpSwagger.Handler(
@@ -100,7 +119,6 @@ func main() {
 
 	go func() {
 		log.Printf("Gospelfast server starting on :%s", port)
-		log.Printf("Swagger UI: http://localhost:%s/swagger/index.html", port)
 		if err := server.ListenAndServe(); err != nil && err != http.ErrServerClosed {
 			log.Fatalf("server: %v", err)
 		}

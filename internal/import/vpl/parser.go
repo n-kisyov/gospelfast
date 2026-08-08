@@ -3,10 +3,13 @@ package vpl
 import (
 	"bufio"
 	"io"
+	"regexp"
 	"strings"
 
 	"github.com/gospelfast/gospelfast/internal/bible"
 )
+
+var tagRe = regexp.MustCompile(`<[^>]*>`) 
 
 type VerseRec struct {
 	BookShort string
@@ -48,6 +51,8 @@ func Parse(r io.Reader) ([]VerseRec, error) {
 			textStart++
 		}
 		text := strings.TrimSpace(line[textStart:])
+		text = tagRe.ReplaceAllString(text, "")
+		text = strings.TrimSpace(text)
 		if text == "" {
 			continue
 		}
