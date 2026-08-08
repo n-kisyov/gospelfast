@@ -17,8 +17,9 @@ import (
 )
 
 type pageData struct {
-	Title   string
-	Content template.HTML
+	Title    string
+	MetaDesc string
+	Content  template.HTML
 }
 
 type pageTemplate struct {
@@ -89,7 +90,7 @@ func NewHandler(d *db.DB, c *cache.Cache, templatesDir string) (*Handler, error)
 	return h, nil
 }
 
-func (h *Handler) renderPage(w http.ResponseWriter, pageName string, data any, title string) {
+func (h *Handler) renderPage(w http.ResponseWriter, pageName string, data any, title, metaDesc string) {
 	pt, ok := h.pages[pageName]
 	if !ok {
 		http.Error(w, "template not found: "+pageName, http.StatusInternalServerError)
@@ -104,8 +105,9 @@ func (h *Handler) renderPage(w http.ResponseWriter, pageName string, data any, t
 	}
 
 	pd := pageData{
-		Title:   title,
-		Content: template.HTML(buf.String()),
+		Title:    title,
+		MetaDesc: metaDesc,
+		Content:  template.HTML(buf.String()),
 	}
 
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
@@ -152,7 +154,7 @@ func (h *Handler) Home(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	h.renderPage(w, "home.html", data, "Gospelfast — Search")
+	h.renderPage(w, "home.html", data, "Gospelfast — Search", "Fast full-text search Bible study tool")
 }
 
 func (h *Handler) Search(w http.ResponseWriter, r *http.Request) {
@@ -190,7 +192,7 @@ func (h *Handler) Search(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	h.renderPage(w, "search.html", data, "Gospelfast — Search")
+	h.renderPage(w, "search.html", data, "Gospelfast — Search", "Bible search results")
 }
 
 type readerData struct {
@@ -256,7 +258,7 @@ func (h *Handler) Reader(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	h.renderPage(w, "reader.html", data, "Gospelfast — Reader")
+	h.renderPage(w, "reader.html", data, "Gospelfast — Reader", "Read the Bible online")
 }
 
 func (h *Handler) ReaderChapter(w http.ResponseWriter, r *http.Request) {
@@ -280,7 +282,7 @@ func (h *Handler) ReaderChapter(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	h.renderPage(w, "reader_chapter.html", data, "Gospelfast — Reader")
+	h.renderPage(w, "reader_chapter.html", data, "Gospelfast — Reader", "Read the Bible online")
 }
 
 type compareData struct {
@@ -298,7 +300,7 @@ func (h *Handler) Compare(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	h.renderPage(w, "compare.html", data, "Gospelfast — Compare")
+	h.renderPage(w, "compare.html", data, "Gospelfast — Compare", "Compare Bible translations side by side")
 }
 
 func (h *Handler) CompareResults(w http.ResponseWriter, r *http.Request) {
@@ -313,7 +315,7 @@ func (h *Handler) CompareResults(w http.ResponseWriter, r *http.Request) {
 	parsed, err := parseSimpleRef(ref)
 	if err != nil {
 		data["Error"] = "Invalid reference: " + ref
-		h.renderPage(w, "compare_result.html", data, " — Compare")
+		h.renderPage(w, "compare_result.html", data, " — Compare", "Compare Bible translations")
 		return
 	}
 
@@ -327,7 +329,7 @@ func (h *Handler) CompareResults(w http.ResponseWriter, r *http.Request) {
 		data["TextB"] = tB + ": " + textB
 	}
 
-	h.renderPage(w, "compare_result.html", data, " — Compare")
+	h.renderPage(w, "compare_result.html", data, " — Compare", "Compare Bible translations")
 }
 
 type simpleRef struct {
@@ -413,6 +415,23 @@ type genbookTOCEntry struct {
 	Title string
 }
 
+func (h *Handler) RenderError(w http.ResponseWriter, code int, title, msg string) {
+	w.Header().Set("Content-Type", "text/html; charset=utf-8")
+	w.WriteHeader(code)
+	pd := pageData{
+		Title:    fmt.Sprintf("%d — %s", code, title),
+		MetaDesc: msg,
+		Content: template.HTML(fmt.Sprintf(
+			`<div class="max-w-2xl mx-auto text-center py-16">
+				<div class="text-6xl font-bold text-gray-200 dark:text-gray-700 mb-4">%d</div>
+				<h1 class="text-xl font-semibold text-gray-800 dark:text-gray-200 mb-2">%s</h1>
+				<p class="text-gray-500 dark:text-gray-400 mb-6">%s</p>
+				<a href="/" class="text-blue-600 hover:underline text-sm">Go home</a>
+			</div>`, code, title, msg)),
+	}
+	_ = h.base.ExecuteTemplate(w, "base.html", pd)
+}
+
 func (h *Handler) Genbook(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 	data := genbookPageData{Selected: "ENOCH", CurrentPath: "/"}
@@ -435,7 +454,7 @@ func (h *Handler) Genbook(w http.ResponseWriter, r *http.Request) {
 
 	trans, err := h.DB.GetTranslationByShortName(ctx, data.Selected)
 	if err != nil {
-		h.renderPage(w, "genbook.html", data, "Gospelfast — Book")
+		h.renderPage(w, "genbook.html", data, "Gospelfast — Book", "Read general books and apocrypha")
 		return
 	}
 
@@ -467,5 +486,5 @@ func (h *Handler) Genbook(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	h.renderPage(w, "genbook.html", data, "Gospelfast — "+data.Selected)
+	h.renderPage(w, "genbook.html", data, "Gospelfast — "+data.Selected, "Read "+data.Selected)
 }

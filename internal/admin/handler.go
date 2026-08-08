@@ -16,8 +16,9 @@ import (
 )
 
 type pageData struct {
-	Title   string
-	Content template.HTML
+	Title    string
+	MetaDesc string
+	Content  template.HTML
 }
 
 type WebHandler struct {
@@ -91,7 +92,7 @@ func (h *WebHandler) renderFragment(w http.ResponseWriter, name string, data any
 	}
 }
 
-func (h *WebHandler) renderPage(w http.ResponseWriter, name string, data any, title string) {
+func (h *WebHandler) renderPage(w http.ResponseWriter, name string, data any, title, metaDesc string) {
 	tmpl, ok := h.templates[name]
 	if !ok {
 		http.Error(w, "template not found: "+name, http.StatusInternalServerError)
@@ -106,8 +107,9 @@ func (h *WebHandler) renderPage(w http.ResponseWriter, name string, data any, ti
 	}
 
 	pd := pageData{
-		Title:   title,
-		Content: template.HTML(buf.String()),
+		Title:    title,
+		MetaDesc: metaDesc,
+		Content:  template.HTML(buf.String()),
 	}
 
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
@@ -150,7 +152,7 @@ func (h *WebHandler) Dashboard(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	h.renderPage(w, "dashboard.html", data, "Gospelfast — Admin")
+	h.renderPage(w, "dashboard.html", data, "Gospelfast — Admin", "Import and manage Bible translations")
 }
 
 func (h *WebHandler) StartImport(w http.ResponseWriter, r *http.Request) {

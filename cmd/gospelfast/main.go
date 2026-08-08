@@ -91,7 +91,7 @@ func main() {
 	})
 
 	// Web pages
-	mux.HandleFunc("GET /", webHandler.Home)
+	mux.HandleFunc("GET /{$}", webHandler.Home)
 	mux.HandleFunc("GET /search", webHandler.Search)
 	mux.HandleFunc("GET /reader", webHandler.Reader)
 	mux.HandleFunc("GET /reader/chapter", webHandler.ReaderChapter)
@@ -123,7 +123,7 @@ func main() {
 		httpSwagger.URL("/swagger/doc.json"),
 	))
 
-	wrapped := withLogging(withCORS(mux))
+	wrapped := withLogging(withCORS(withNotFound(mux, webHandler)))
 
 	server := &http.Server{
 		Addr:         ":" + port,
@@ -185,4 +185,14 @@ func envOrDefault(key, fallback string) string {
 		return v
 	}
 	return fallback
+}
+
+func withNotFound(next http.Handler, wh *web.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		rw := &responseWriter{ResponseWriter: w, status: 200}
+		next.ServeHTTP(rw, r)
+		if rw.status == http.StatusNotFound {
+			wh.RenderError(w, 404, "Page not found", "The page you were looking for does not exist.")
+		}
+	})
 }
