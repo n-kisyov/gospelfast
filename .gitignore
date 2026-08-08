@@ -28,7 +28,8 @@ web/static/css/tailwind.css
 .env.local
 *.env
 
-# Temp / test artifacts
+# Swagger generated docs
+/docs/
 tmp/
 /tmp/
 test.txt

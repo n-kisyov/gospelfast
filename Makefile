@@ -4,11 +4,14 @@ APP=gospelfast
 CLI=gospelfast-cli
 DB_URL=postgres://gospelfast:gospelfast@localhost:5432/gospelfast?sslmode=disable
 
-build:
+build: swagger
 	go build -o bin/$(APP) ./cmd/$(APP)/
 	go build -o bin/$(CLI) ./cmd/$(CLI)/
 
-run:
+swagger:
+	swag init -g cmd/$(APP)/main.go -o docs/
+
+run: swagger
 	go run ./cmd/$(APP)/
 
 run-cli:
