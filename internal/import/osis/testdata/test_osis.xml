@@ -1,0 +1,34 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<osis xmlns="http://www.bibletechnologies.net/2003/OSIS/namespace"
+      xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance">
+  <osisText osisIDWork="TEST">
+    <header>
+      <work osisWork="TEST">
+        <title>Test Bible</title>
+        <identifier type="OSIS">Bible.TEST</identifier>
+      </work>
+    </header>
+    <div type="book" osisID="Gen" canonical="true">
+      <title type="main">Genesis</title>
+      <chapter osisID="Gen.1">
+        <title>Chapter 1</title>
+        <verse osisID="Gen.1.1">In the beginning God created the heaven and the earth.</verse>
+        <verse osisID="Gen.1.2">And the earth was without form, and void; and darkness was upon the face of the deep. And the Spirit of God moved upon the face of the waters.</verse>
+        <verse osisID="Gen.1.3">And God said, Let there be light: and there was light.</verse>
+        <verse osisID="Gen.1.4">And God saw the light, that it was good: and God divided the light from the darkness.</verse>
+        <verse osisID="Gen.1.5">And God called the light Day, and the darkness he called Night. And the evening and the morning were the first day.</verse>
+      </chapter>
+      <chapter osisID="Gen.2">
+        <verse osisID="Gen.2.1">Thus the heavens and the earth were finished, and all the host of them.</verse>
+        <verse osisID="Gen.2.2">And on the seventh day God ended his work which he had made; and he rested on the seventh day from all his work which he had made.</verse>
+      </chapter>
+    </div>
+    <div type="book" osisID="John" canonical="true">
+      <title type="main">John</title>
+      <chapter osisID="John.3">
+        <verse osisID="John.3.16">For God so loved the world, that he gave his only begotten Son, that whosoever believeth in him should not perish, but have everlasting life.</verse>
+        <verse osisID="John.3.17">For God sent not his Son into the world to condemn the world; but that the world through him might be saved.</verse>
+      </chapter>
+    </div>
+  </osisText>
+</osis>

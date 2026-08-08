@@ -1,0 +1,40 @@
+.PHONY: build run run-cli test migrate-up migrate-down migrate-create clean dev css
+
+APP=gospelfast
+CLI=gospelfast-cli
+DB_URL=postgres://gospelfast:gospelfast@localhost:5432/gospelfast?sslmode=disable
+
+build:
+	go build -o bin/$(APP) ./cmd/$(APP)/
+	go build -o bin/$(CLI) ./cmd/$(CLI)/
+
+run:
+	go run ./cmd/$(APP)/
+
+run-cli:
+	go run ./cmd/$(CLI)/
+
+test:
+	go test ./...
+
+css:
+	cd web && npx tailwindcss -i ./static/css/input.css -o ./static/css/tailwind.css --minify
+
+css-watch:
+	cd web && npx tailwindcss -i ./static/css/input.css -o ./static/css/tailwind.css --watch
+
+dev: css
+	go run ./cmd/$(APP)/
+
+migrate-up:
+	migrate -path internal/db/migrations -database "$(DB_URL)" up
+
+migrate-down:
+	migrate -path internal/db/migrations -database "$(DB_URL)" down
+
+migrate-create:
+	@read -p "Migration name: " name; \
+	migrate create -ext sql -dir internal/db/migrations -seq $$name
+
+clean:
+	rm -rf bin/

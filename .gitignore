@@ -1,0 +1,37 @@
+# Build output
+/bin/
+/bin/*
+*.exe
+
+# Go
+*.test
+*.out
+*.prof
+
+# IDE
+.idea/
+.vscode/
+*.swp
+*.swo
+*~
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Node / TailwindCSS
+web/node_modules/
+web/static/css/tailwind.css
+
+# Environment
+.env
+.env.local
+*.env
+
+# Temp / test artifacts
+tmp/
+/tmp/
+test.txt
+
+# Docker volumes
+pgdata/
