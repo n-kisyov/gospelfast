@@ -55,7 +55,16 @@ func NewHandler(d *db.DB, c *cache.Cache, templatesDir string) (*Handler, error)
 		templatesDir: templatesDir,
 	}
 
-	for _, name := range []string{"home.html", "reader.html", "reader_chapter.html", "compare.html", "compare_result.html", "search.html"} {
+	pageDeps := map[string][]string{
+		"home.html":             {"search.html"},
+		"reader.html":           {"reader_chapter.html"},
+		"reader_chapter.html":   {},
+		"compare.html":          {},
+		"compare_result.html":   {},
+		"search.html":           {},
+	}
+
+	for name, deps := range pageDeps {
 		path := filepath.Join(templatesDir, name)
 		if _, err := os.Stat(path); err != nil {
 			log.Printf("template %s not found, skipping", name)
@@ -65,7 +74,11 @@ func NewHandler(d *db.DB, c *cache.Cache, templatesDir string) (*Handler, error)
 		if err != nil {
 			return nil, fmt.Errorf("clone for %s: %w", name, err)
 		}
-		tmpl, err = tmpl.ParseFiles(path)
+		paths := []string{path}
+		for _, dep := range deps {
+			paths = append(paths, filepath.Join(templatesDir, dep))
+		}
+		tmpl, err = tmpl.ParseFiles(paths...)
 		if err != nil {
 			return nil, fmt.Errorf("parse %s: %w", name, err)
 		}
