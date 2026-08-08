@@ -2,6 +2,7 @@ package db
 
 import (
 	"context"
+	"strings"
 
 	"github.com/gospelfast/gospelfast/internal/bible"
 	"github.com/jackc/pgx/v5"
@@ -97,7 +98,7 @@ func (db *DB) GetVersificationByName(ctx context.Context, name string) (string, 
 }
 
 func (db *DB) CreateBook(ctx context.Context, book *bible.Book) error {
-	return db.Pool.QueryRow(ctx, `
+	err := db.Pool.QueryRow(ctx, `
 		INSERT INTO books (versification_id, name, short_name, testament, book_order, chapter_count)
 		VALUES ($1, $2, $3, $4, $5, $6)
 		ON CONFLICT (versification_id, short_name) DO UPDATE SET
@@ -105,6 +106,18 @@ func (db *DB) CreateBook(ctx context.Context, book *bible.Book) error {
 			book_order = EXCLUDED.book_order, chapter_count = EXCLUDED.chapter_count
 		RETURNING id
 	`, book.VersificationID, book.Name, book.ShortName, book.Testament, book.BookOrder, book.ChapterCount).Scan(&book.ID)
+
+	if err == nil {
+		return nil
+	}
+
+	if strings.Contains(err.Error(), "23505") || strings.Contains(err.Error(), "duplicate key") {
+		return db.Pool.QueryRow(ctx, `
+			SELECT id FROM books WHERE versification_id = $1 AND short_name = $2
+		`, book.VersificationID, book.ShortName).Scan(&book.ID)
+	}
+
+	return err
 }
 
 func (db *DB) GetBooksByVersification(ctx context.Context, versificationID string) ([]bible.Book, error) {

@@ -40,6 +40,8 @@ func (p *Pipeline) ImportFile(ctx context.Context, source, name string, format F
 	}
 	defer os.RemoveAll(tmpDir)
 
+	versification := "KJV"
+
 	if format == FormatRawzip {
 		if progress != nil {
 			progress("downloading and converting rawzip", 0, 0)
@@ -49,8 +51,13 @@ func (p *Pipeline) ImportFile(ctx context.Context, source, name string, format F
 		if err != nil {
 			return fmt.Errorf("rawzip conversion: %w", err)
 		}
-		if name == "" && meta != nil {
-			name = meta.ModName
+		if meta != nil {
+			if name == "" {
+				name = meta.ModName
+			}
+			if meta.Versification != "" {
+				versification = meta.Versification
+			}
 		}
 		if name == "" {
 			name = filepath.Base(strings.TrimSuffix(source, ".zip"))
@@ -64,9 +71,9 @@ func (p *Pipeline) ImportFile(ctx context.Context, source, name string, format F
 
 	switch format {
 	case FormatVPL:
-		return p.importVPL(ctx, source, name, progress)
+		return p.importVPL(ctx, source, name, versification, progress)
 	case FormatOSIS:
-		return p.importOSIS(ctx, source, name, progress)
+		return p.importOSIS(ctx, source, name, versification, progress)
 	default:
 		return fmt.Errorf("unknown format")
 	}
@@ -82,7 +89,7 @@ func (p *Pipeline) ImportOSISData(ctx context.Context, data []byte, name string,
 		return err
 	}
 	tmpFile.Close()
-	return p.importOSIS(ctx, tmpFile.Name(), name, progress)
+	return p.importOSIS(ctx, tmpFile.Name(), name, "KJV", progress)
 }
 
 type verseBatch struct {
@@ -90,7 +97,7 @@ type verseBatch struct {
 	Verses     []bible.Verse
 }
 
-func (p *Pipeline) importOSIS(ctx context.Context, xmlPath, name string, progress ProgressFn) error {
+func (p *Pipeline) importOSIS(ctx context.Context, xmlPath, name, versification string, progress ProgressFn) error {
 	f, err := os.Open(xmlPath)
 	if err != nil {
 		return fmt.Errorf("open xml: %w", err)
@@ -134,7 +141,7 @@ func (p *Pipeline) importOSIS(ctx context.Context, xmlPath, name string, progres
 
 	_ = p.DB.DeleteTranslationByShortName(ctx, strings.ToUpper(name))
 
-	versificationName := "KJV"
+	versificationName := versification
 	versificationID, err := p.DB.CreateVersification(ctx, versificationName)
 	if err != nil {
 		return fmt.Errorf("create versification: %w", err)
@@ -220,7 +227,7 @@ func (p *Pipeline) importOSIS(ctx context.Context, xmlPath, name string, progres
 	return nil
 }
 
-func (p *Pipeline) importVPL(ctx context.Context, path string, name string, progress ProgressFn) error {
+func (p *Pipeline) importVPL(ctx context.Context, path string, name string, versification string, progress ProgressFn) error {
 	f, err := os.Open(path)
 	if err != nil {
 		return err
@@ -238,7 +245,7 @@ func (p *Pipeline) importVPL(ctx context.Context, path string, name string, prog
 		progress("parsed VPL", len(recs), len(recs))
 	}
 
-	versificationID, err := p.DB.CreateVersification(ctx, "KJV")
+	versificationID, err := p.DB.CreateVersification(ctx, versification)
 	if err != nil {
 		return err
 	}

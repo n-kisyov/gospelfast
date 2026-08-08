@@ -43,9 +43,9 @@ func ConvertRawzip(sourceURL, tmpDir string) (string, *ModuleMeta, error) {
 		return "", nil, fmt.Errorf("parse conf: %w", err)
 	}
 
-	modName := findModName(extractDir)
-	if modName == "" && meta != nil {
-		modName = meta.ModName
+	modName := meta.ModName
+	if modName == "" {
+		modName = findModName(extractDir)
 	}
 	if modName == "" {
 		return "", nil, fmt.Errorf("could not determine module name")
