@@ -58,7 +58,7 @@ func (h *Handler) ListGenbooks(w http.ResponseWriter, r *http.Request) {
 // @Param        t     query  string  true  "Translation short name"
 // @Param        path  query  string  true  "Entry path"
 // @Success      200  {object}  genbookEntryResp
-// @Router       /api/genbooks/{path} [get]
+// @Router       /api/genbooks/entry [get]
 func (h *Handler) GetGenbookEntry(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 	transShort := r.URL.Query().Get("t")

@@ -155,6 +155,15 @@ func (h *WebHandler) Dashboard(w http.ResponseWriter, r *http.Request) {
 	h.renderPage(w, "dashboard.html", data, "Gospelfast — Admin", "Import and manage Bible translations")
 }
 
+// @Summary      Start import job
+// @Tags         admin
+// @Security     BasicAuth
+// @Accept       multipart/form-data
+// @Param        source formData string true "Source URL"
+// @Param        name   formData string false "Translation name"
+// @Param        format formData string false "Format (rawzip, osis, vpl)"
+// @Success      200
+// @Router       /admin/api/imports [post]
 func (h *WebHandler) StartImport(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodPost {
 		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
@@ -181,6 +190,13 @@ func (h *WebHandler) StartImport(w http.ResponseWriter, r *http.Request) {
 	h.renderFragment(w, "import_status.html", map[string]any{"Job": job, "Percent": 0})
 }
 
+// @Summary      Get import job status
+// @Tags         admin
+// @Security     BasicAuth
+// @Produce      json
+// @Param        id path string true "Job ID"
+// @Success      200  {object}  Job
+// @Router       /admin/api/imports/{id} [get]
 func (h *WebHandler) ImportStatus(w http.ResponseWriter, r *http.Request) {
 	jobID := r.PathValue("id")
 	if jobID == "" {
