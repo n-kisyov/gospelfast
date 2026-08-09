@@ -1,114 +1,106 @@
 # Gospelfast
 
-Fast full-text search Bible web application written in Go.
+Fast full-text search Bible web app in Go. HTMX + Alpine.js + TailwindCSS frontend, PostgreSQL full-text search backend.
 
 ## Features
 
-- **Full-text search** across all imported Bible texts with PostgreSQL `tsvector` + highlighting
-- **Multiple translation support** — import KJV, ESV, or any SWORD-format module
-- **SWORD rawzip import** — paste a CrossWire rawzip URL and import directly from the admin dashboard
-- **General book support** — import and browse GenBook modules (e.g., Book of Enoch)
-- **Bible reader** — browse by book/chapter with direct chapter navigation
-- **Translation comparison** — view two translations side by side
-- **Redis caching** — optional read-through cache for chapter text and search results
-- **Admin dashboard** — manage translations, import new texts with progress tracking
-- **Swagger API docs** — interactive API documentation at `/swagger/index.html`
-- **Dark mode** — toggle with sun/moon icon (persists in localStorage)
-- **Mobile responsive** — works on phones and tablets
+- **Full-text search** — PostgreSQL `tsvector` with `<mark>` highlighting
+- **Multiple translations** — Bible texts, commentaries, and general books via SWORD import
+- **SWORD rawzip import** — paste a CrossWire URL, import from admin dashboard with live progress
+- **Bible reader** — book/chapter navigation with direct chapter jump and copy-to-clipboard
+- **Inline commentary** — click any verse number to load commentary (e.g. KingComments)
+- **Comparison** — view two translations side by side
+- **Verse of the Day** — deterministic daily verse from KJV on the home page
+- **User accounts** — login/logout, session-based auth, admin/reader roles
+- **Admin dashboard** — manage translations, import texts, add/delete users
+- **Redis caching** — optional read-through cache for chapters and search results
+- **Swagger API docs** — `/swagger/index.html` with all endpoints
+- **Dark mode** — toggle persists in localStorage, works on all pages
+- **Mobile responsive** — hamburger menu on small screens
 
 ## Quick Start
 
-### Prerequisites
-
-- Go 1.22+
-- PostgreSQL 16+
-- Redis 7+ (optional, app runs without it)
-- SWORD utilities (`mod2imp`) for rawzip import: `sudo apt install libsword-utils`
-- `golang-migrate` CLI: `go install -tags 'postgres' github.com/golang-migrate/migrate/v4/cmd/migrate@latest`
-
-### Setup
-
 ```bash
-# Clone
-git clone https://github.com/gospelfast/gospelfast.git
-cd gospelfast
+git clone https://github.com/gospelfast/gospelfast.git && cd gospelfast
 
-# Start database
+# Start PostgreSQL + Redis (optional)
 sudo docker compose up -d
 
-# Run migrations
+# Install migrate CLI
+go install -tags 'postgres' github.com/golang-migrate/migrate/v4/cmd/migrate@latest
 make migrate-up
 
 # Import KJV from bible-api.com (~30 min)
 go run ./cmd/gospelfast-cli/ seed
 
-# Or import a SWORD rawzip module
-go run ./cmd/gospelfast-cli/ import \
-  --source https://www.crosswire.org/ftpmirror/pub/sword/packages/rawzip/KJVA.zip \
-  --name KJVA --format rawzip
-
-# Start server
+# Start server (auto-seeds admin user on first run)
 go run ./cmd/gospelfast/
+# → http://localhost:8080
+# → Login: http://localhost:8080/login (admin / gospelfast)
+# → Admin: http://localhost:8080/admin
 ```
 
-Open http://localhost:8080
-
-### Environment Variables
+## Environment Variables
 
 | Variable | Default | Description |
 |----------|---------|-------------|
 | `DATABASE_URL` | `postgres://gospelfast:gospelfast@localhost:5432/gospelfast?sslmode=disable` | PostgreSQL connection |
-| `REDIS_URL` | `localhost:6379` | Redis address (optional) |
-| `PORT` | `8080` | HTTP listen port |
-| `ADMIN_PASSWORD` | `gospelfast` | Admin dashboard password |
-| `TEMPLATES_DIR` | `web/templates` | HTML template directory |
-| `STATIC_DIR` | `web/static` | Static files directory |
+| `REDIS_URL` | `localhost:6379` | Redis (optional) |
+| `PORT` | `8080` | HTTP port |
+| `ADMIN_PASSWORD` | `gospelfast` | Admin password (set before first startup) |
 
-## Architecture
+## CLI
 
-```
-cmd/
-  gospelfast/          # Web server
-  gospelfast-cli/      # CLI import tool
+```bash
+# Import from SWORD rawzip
+go run ./cmd/gospelfast-cli/ import \
+  --source https://www.crosswire.org/.../KJVA.zip --name KJVA --format rawzip
 
-internal/
-  bible/               # Core domain: Verse, Book, Translation models, reference parser
-  db/                  # PostgreSQL: connection pool, migrations, queries
-  import/              # Import pipeline
-    osis/              #   OSIS XML parser (container + milestone verse formats)
-    vpl/               #   VPL verse-per-line parser
-    sword/             #   SWORD rawzip converter (mod2imp wrapper)
-  api/                 # REST API handlers
-  admin/               # Admin dashboard: auth, job manager, import UI
-  cache/               # Redis read-through caching
-  search/              # Full-text search query builder
-  seed/                # KJV downloader from bible-api.com
-  web/                 # Frontend page handlers
+# Import local files
+go run ./cmd/gospelfast-cli/ import --source bible.xml --name ESV --format osis
 
-web/templates/         # Go HTML templates (HTMX + Alpine.js + TailwindCSS)
+# Download KJV from bible-api.com
+go run ./cmd/gospelfast-cli/ seed
 ```
 
 ## API
 
-Interactive docs at `/swagger/index.html` when the server is running.
+Interactive docs at `/swagger/index.html`.
 
 | Method | Endpoint | Description |
 |--------|----------|-------------|
-| `GET` | `/api/translations` | List all translations |
-| `GET` | `/api/books?t=KJV` | List books for a translation |
-| `GET` | `/api/verses?ref=John+3:16&t=KJV` | Get verse by reference |
-| `GET` | `/api/chapters/KJV/1?book=Gen` | Get chapter verses |
+| `GET` | `/api/translations` | List translations |
+| `GET` | `/api/books?t=KJV` | List books |
+| `GET` | `/api/verses?ref=John+3:16&t=KJV` | Get verse |
+| `GET` | `/api/chapters/KJV/1?book=Gen` | Get chapter |
 | `GET` | `/api/search?q=love&t=KJV` | Full-text search |
-| `GET` | `/api/genbooks?t=ENOCH` | Browse genbook entries |
+| `GET` | `/api/commentary?t=KINGCOMMENTS&book=Gen&ref=Gen.1.1` | Commentary entry |
+| `GET` | `/api/genbooks?t=ENOCH` | Browse genbooks |
 
-### Admin (Basic Auth)
+### Admin (session auth)
 
 | Method | Endpoint | Description |
 |--------|----------|-------------|
 | `GET` | `/admin` | Dashboard |
-| `POST` | `/admin/api/imports` | Start import job |
-| `GET` | `/admin/api/imports/:id` | Import job status |
-| `DELETE` | `/admin/api/translations/:id` | Delete translation |
+| `POST` | `/admin/api/imports` | Start import |
+| `POST` | `/admin/api/users` | Create user |
+| `DELETE` | `/admin/api/users/{id}` | Delete user |
+
+## Architecture
+
+```
+cmd/{gospelfast,gospelfast-cli}/   # Server + CLI
+internal/
+  bible/    # Models, reference parser
+  db/       # PostgreSQL pool, migrations, queries
+  import/   # OSIS/VPL/SWORD parsers + pipeline
+  api/      # REST handlers
+  admin/    # Auth, job manager, dashboard handlers
+  web/      # Page handlers + templates
+  cache/    # Redis read-through
+  seed/     # KJV API downloader
+web/templates/   # Go HTML (HTMX + Alpine + Tailwind)
+```
 
 ## License
 
