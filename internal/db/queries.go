@@ -2,7 +2,10 @@ package db
 
 import (
 	"context"
+	"crypto/rand"
+	"encoding/hex"
 	"strings"
+	"time"
 
 	"github.com/gospelfast/gospelfast/internal/bible"
 	"github.com/jackc/pgx/v5"
@@ -10,14 +13,14 @@ import (
 
 func (db *DB) CreateTranslation(ctx context.Context, t *bible.Translation) error {
 	return db.Pool.QueryRow(ctx, `
-		INSERT INTO translations (short_name, full_name, language, versification_id, description, source_url, copyright, metadata, created_at, updated_at)
-		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
+		INSERT INTO translations (short_name, full_name, language, module_type, versification_id, description, source_url, copyright, metadata, created_at, updated_at)
+		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
 		ON CONFLICT (short_name) DO UPDATE SET full_name = EXCLUDED.full_name, language = EXCLUDED.language,
-		    versification_id = EXCLUDED.versification_id, description = EXCLUDED.description,
-		    source_url = EXCLUDED.source_url, copyright = EXCLUDED.copyright,
-		    metadata = EXCLUDED.metadata, updated_at = EXCLUDED.updated_at
+		    module_type = EXCLUDED.module_type, versification_id = EXCLUDED.versification_id,
+		    description = EXCLUDED.description, source_url = EXCLUDED.source_url,
+		    copyright = EXCLUDED.copyright, metadata = EXCLUDED.metadata, updated_at = EXCLUDED.updated_at
 		RETURNING id
-	`, t.ShortName, t.FullName, t.Language, t.VersificationID,
+	`, t.ShortName, t.FullName, t.Language, t.ModuleType, t.VersificationID,
 		t.Description, t.SourceURL, t.Copyright, t.Metadata,
 		t.CreatedAt, t.UpdatedAt).Scan(&t.ID)
 }
@@ -25,9 +28,9 @@ func (db *DB) CreateTranslation(ctx context.Context, t *bible.Translation) error
 func (db *DB) GetTranslation(ctx context.Context, id string) (*bible.Translation, error) {
 	t := &bible.Translation{}
 	err := db.Pool.QueryRow(ctx, `
-		SELECT id, short_name, full_name, language, versification_id, description, source_url, copyright, metadata, created_at, updated_at
+		SELECT id, short_name, full_name, language, COALESCE(module_type, 'bible'), versification_id, description, source_url, copyright, metadata, created_at, updated_at
 		FROM translations WHERE id = $1
-	`, id).Scan(&t.ID, &t.ShortName, &t.FullName, &t.Language, &t.VersificationID,
+	`, id).Scan(&t.ID, &t.ShortName, &t.FullName, &t.Language, &t.ModuleType, &t.VersificationID,
 		&t.Description, &t.SourceURL, &t.Copyright, &t.Metadata,
 		&t.CreatedAt, &t.UpdatedAt)
 	if err != nil {
@@ -39,9 +42,9 @@ func (db *DB) GetTranslation(ctx context.Context, id string) (*bible.Translation
 func (db *DB) GetTranslationByShortName(ctx context.Context, shortName string) (*bible.Translation, error) {
 	t := &bible.Translation{}
 	err := db.Pool.QueryRow(ctx, `
-		SELECT id, short_name, full_name, language, versification_id, description, source_url, copyright, metadata, created_at, updated_at
+		SELECT id, short_name, full_name, language, COALESCE(module_type, 'bible'), versification_id, description, source_url, copyright, metadata, created_at, updated_at
 		FROM translations WHERE short_name = $1
-	`, shortName).Scan(&t.ID, &t.ShortName, &t.FullName, &t.Language, &t.VersificationID,
+	`, shortName).Scan(&t.ID, &t.ShortName, &t.FullName, &t.Language, &t.ModuleType, &t.VersificationID,
 		&t.Description, &t.SourceURL, &t.Copyright, &t.Metadata,
 		&t.CreatedAt, &t.UpdatedAt)
 	if err != nil {
@@ -52,7 +55,7 @@ func (db *DB) GetTranslationByShortName(ctx context.Context, shortName string) (
 
 func (db *DB) ListTranslations(ctx context.Context) ([]bible.Translation, error) {
 	rows, err := db.Pool.Query(ctx, `
-		SELECT id, short_name, full_name, language, versification_id, description, source_url, copyright, metadata, created_at, updated_at
+		SELECT id, short_name, full_name, language, COALESCE(module_type, 'bible'), versification_id, description, source_url, copyright, metadata, created_at, updated_at
 		FROM translations ORDER BY created_at DESC
 	`)
 	if err != nil {
@@ -63,7 +66,7 @@ func (db *DB) ListTranslations(ctx context.Context) ([]bible.Translation, error)
 	var list []bible.Translation
 	for rows.Next() {
 		var t bible.Translation
-		if err := rows.Scan(&t.ID, &t.ShortName, &t.FullName, &t.Language, &t.VersificationID,
+		if err := rows.Scan(&t.ID, &t.ShortName, &t.FullName, &t.Language, &t.ModuleType, &t.VersificationID,
 			&t.Description, &t.SourceURL, &t.Copyright, &t.Metadata,
 			&t.CreatedAt, &t.UpdatedAt); err != nil {
 			return nil, err
@@ -311,5 +314,180 @@ func (db *DB) GetGenbookEntry(ctx context.Context, translationID, path string) (
 		return nil, err
 	}
 	return e, nil
+}
+
+type CommentaryEntry struct {
+	ID            int64  `json:"id"`
+	TranslationID string `json:"translation_id"`
+	BookID        string `json:"book_id"`
+	BookName      string `json:"book_name,omitempty"`
+	Chapter       int    `json:"chapter"`
+	Verse         int    `json:"verse"`
+	Content       string `json:"content"`
+}
+
+func (db *DB) InsertCommentaryEntries(ctx context.Context, translationID string, entries []CommentaryEntry) (int64, error) {
+	return db.Pool.CopyFrom(
+		ctx,
+		pgx.Identifier{"commentary_entries"},
+		[]string{"translation_id", "book_id", "chapter", "verse", "content"},
+		pgx.CopyFromSlice(len(entries), func(i int) ([]any, error) {
+			e := entries[i]
+			return []any{translationID, e.BookID, e.Chapter, e.Verse, e.Content}, nil
+		}),
+	)
+}
+
+func (db *DB) GetCommentary(ctx context.Context, translationID, bookID string, chapter, verse int) (*CommentaryEntry, error) {
+	e := &CommentaryEntry{}
+	err := db.Pool.QueryRow(ctx, `
+		SELECT c.id, c.translation_id, c.book_id, b.name, c.chapter, c.verse, c.content
+		FROM commentary_entries c
+		JOIN books b ON b.id = c.book_id
+		WHERE c.translation_id = $1 AND c.book_id = $2 AND c.chapter = $3 AND c.verse = $4
+	`, translationID, bookID, chapter, verse).Scan(
+		&e.ID, &e.TranslationID, &e.BookID, &e.BookName, &e.Chapter, &e.Verse, &e.Content,
+	)
+	if err != nil {
+		return nil, err
+	}
+	return e, nil
+}
+
+func (db *DB) ListCommentariesForBook(ctx context.Context, translationID, bookID string) ([]CommentaryEntry, error) {
+	rows, err := db.Pool.Query(ctx, `
+		SELECT c.id, c.translation_id, c.book_id, b.name, c.chapter, c.verse, c.content
+		FROM commentary_entries c
+		JOIN books b ON b.id = c.book_id
+		WHERE c.translation_id = $1 AND c.book_id = $2
+		ORDER BY c.chapter, c.verse
+	`, translationID, bookID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	var entries []CommentaryEntry
+	for rows.Next() {
+		var e CommentaryEntry
+		if err := rows.Scan(&e.ID, &e.TranslationID, &e.BookID, &e.BookName, &e.Chapter, &e.Verse, &e.Content); err != nil {
+			return nil, err
+		}
+		entries = append(entries, e)
+	}
+	return entries, nil
+}
+
+type User struct {
+	ID           string    `json:"id"`
+	Username     string    `json:"username"`
+	PasswordHash string    `json:"-"`
+	Role         string    `json:"role"`
+	CreatedAt    time.Time `json:"created_at"`
+}
+
+func (db *DB) CreateUser(ctx context.Context, username, passwordHash, role string) (*User, error) {
+	u := &User{}
+	err := db.Pool.QueryRow(ctx, `
+		INSERT INTO users (username, password_hash, role) VALUES ($1, $2, $3)
+		RETURNING id, username, role, created_at
+	`, username, passwordHash, role).Scan(&u.ID, &u.Username, &u.Role, &u.CreatedAt)
+	if err != nil {
+		return nil, err
+	}
+	return u, nil
+}
+
+func (db *DB) GetUserByUsername(ctx context.Context, username string) (*User, error) {
+	u := &User{Username: username}
+	err := db.Pool.QueryRow(ctx, `
+		SELECT id, password_hash, role, created_at FROM users WHERE username = $1
+	`, username).Scan(&u.ID, &u.PasswordHash, &u.Role, &u.CreatedAt)
+	if err != nil {
+		return nil, err
+	}
+	return u, nil
+}
+
+func (db *DB) CreateSession(ctx context.Context, userID string, expiresAt time.Time) (string, error) {
+	b := make([]byte, 32)
+	if _, err := rand.Read(b); err != nil {
+		return "", err
+	}
+	token := hex.EncodeToString(b)
+
+	_, err := db.Pool.Exec(ctx, `
+		INSERT INTO sessions (token, user_id, expires_at) VALUES ($1, $2, $3)
+	`, token, userID, expiresAt)
+	if err != nil {
+		return "", err
+	}
+	return token, nil
+}
+
+func (db *DB) GetSession(ctx context.Context, token string) (*User, error) {
+	u := &User{}
+	err := db.Pool.QueryRow(ctx, `
+		SELECT u.id, u.username, u.role, u.created_at
+		FROM sessions s JOIN users u ON u.id = s.user_id
+		WHERE s.token = $1 AND s.expires_at > NOW()
+	`, token).Scan(&u.ID, &u.Username, &u.Role, &u.CreatedAt)
+	if err != nil {
+		return nil, err
+	}
+	return u, nil
+}
+
+func (db *DB) DeleteSession(ctx context.Context, token string) error {
+	_, err := db.Pool.Exec(ctx, `DELETE FROM sessions WHERE token = $1`, token)
+	return err
+}
+
+func (db *DB) CleanSessions(ctx context.Context) error {
+	_, err := db.Pool.Exec(ctx, `DELETE FROM sessions WHERE expires_at < NOW()`)
+	return err
+}
+
+func (db *DB) UserCount(ctx context.Context) (int, error) {
+	var count int
+	err := db.Pool.QueryRow(ctx, `SELECT COUNT(*) FROM users`).Scan(&count)
+	return count, err
+}
+
+func (db *DB) ListUsers(ctx context.Context) ([]User, error) {
+	rows, err := db.Pool.Query(ctx, `SELECT id, username, role, created_at FROM users ORDER BY created_at`)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var users []User
+	for rows.Next() {
+		var u User
+		if err := rows.Scan(&u.ID, &u.Username, &u.Role, &u.CreatedAt); err != nil {
+			return nil, err
+		}
+		users = append(users, u)
+	}
+	return users, nil
+}
+
+func (db *DB) DeleteUser(ctx context.Context, id string) error {
+	_, err := db.Pool.Exec(ctx, `DELETE FROM users WHERE id = $1`, id)
+	return err
+}
+
+func (db *DB) GetRandomVerse(ctx context.Context, translationID string, seed int64) (*bible.Verse, error) {
+	v := &bible.Verse{}
+	err := db.Pool.QueryRow(ctx, `
+		SELECT v.id, v.translation_id, v.book_id, v.chapter, v.verse, v.text, b.name, b.short_name
+		FROM verses v JOIN books b ON b.id = v.book_id
+		WHERE v.translation_id = $1
+		ORDER BY (v.id * $2) % 7919
+		LIMIT 1
+	`, translationID, seed).Scan(&v.ID, &v.TranslationID, &v.BookID, &v.Chapter, &v.Verse, &v.Text, &v.BookName, &v.BookShortName)
+	if err != nil {
+		return nil, err
+	}
+	return v, nil
 }
 

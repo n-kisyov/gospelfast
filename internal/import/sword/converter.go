@@ -19,6 +19,7 @@ var tagRe = regexp.MustCompile(`<[^>]*>`)
 type ModuleMeta struct {
 	ModName       string
 	ModDrv        string
+	ModuleType    string
 	Versification string
 	Lang          string
 	Description   string
@@ -57,13 +58,21 @@ func ConvertRawzip(sourceURL, tmpDir string) (string, *ModuleMeta, error) {
 	}
 
 	isGenbook := meta.ModDrv == "RawGenBook"
+	isCommentary := meta.ModDrv == "RawCom" || meta.ModDrv == "RawCom4" ||
+		meta.ModDrv == "zCom" || meta.ModDrv == "zCom4"
 
-	if !isGenbook && meta.ModDrv != "" &&
+	if !isGenbook && !isCommentary && meta.ModDrv != "" &&
 		meta.ModDrv != "RawText" && meta.ModDrv != "RawText4" &&
-		meta.ModDrv != "zText" && meta.ModDrv != "zText4" &&
-		meta.ModDrv != "RawCom" && meta.ModDrv != "RawCom4" &&
-		meta.ModDrv != "zCom" && meta.ModDrv != "zCom4" {
-		return "", nil, fmt.Errorf("unsupported module type %q — only Bible texts, commentaries, and general books are supported", meta.ModDrv)
+		meta.ModDrv != "zText" && meta.ModDrv != "zText4" {
+		return "", nil, fmt.Errorf("unsupported module type %q", meta.ModDrv)
+	}
+
+	if isGenbook {
+		meta.ModuleType = "genbook"
+	} else if isCommentary {
+		meta.ModuleType = "commentary"
+	} else {
+		meta.ModuleType = "bible"
 	}
 
 	cmd := exec.Command("mod2imp", modName)

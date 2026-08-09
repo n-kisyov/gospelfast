@@ -105,6 +105,10 @@ func (p *Pipeline) ImportFile(ctx context.Context, source, name string, format F
 			return p.importGenbook(ctx, convertedPath, name, progress)
 		}
 
+		if meta != nil && meta.ModuleType == "commentary" {
+			return p.importCommentary(ctx, convertedPath, name, meta.Versification, progress)
+		}
+
 		source = convertedPath
 		format = FormatVPL
 	}
@@ -372,6 +376,119 @@ func (p *Pipeline) importVPL(ctx context.Context, path string, name string, vers
 		}
 	}
 
+	return nil
+}
+
+func (p *Pipeline) importCommentary(ctx context.Context, vplPath, name, versification string, progress ProgressFn) error {
+	f, err := os.Open(vplPath)
+	if err != nil {
+		return err
+	}
+	defer f.Close()
+
+	recs, err := vpl.Parse(f)
+	if err != nil {
+		return fmt.Errorf("parse commentary: %w", err)
+	}
+	if len(recs) == 0 {
+		return fmt.Errorf("no entries found in commentary module")
+	}
+	if progress != nil {
+		progress("parsed commentary", len(recs), len(recs))
+	}
+
+	versificationName := versification
+	if versificationName == "" {
+		versificationName = "KJV"
+	}
+	versificationID, err := p.DB.CreateVersification(ctx, versificationName)
+	if err != nil {
+		return err
+	}
+
+	bookNames := make(map[string]int)
+	for _, r := range recs {
+		if _, ok := bookNames[r.BookShort]; !ok {
+			bookNames[r.BookShort] = len(bookNames)
+		}
+	}
+
+	bookIDs := make(map[string]string)
+	for short, order := range bookNames {
+		canon := bible.GetKJVBook(short)
+		nameVal := short
+		if canon != nil {
+			nameVal = canon.Name
+		}
+		testament := "OT"
+		if order >= 39 {
+			testament = "NT"
+		}
+		book := &bible.Book{
+			VersificationID: versificationID,
+			Name:            nameVal,
+			ShortName:       short,
+			Testament:       testament,
+			BookOrder:       order + 1,
+			ChapterCount:    0,
+		}
+		for _, r := range recs {
+			if r.BookShort == short && r.Chapter > book.ChapterCount {
+				book.ChapterCount = r.Chapter
+			}
+		}
+		if err := p.DB.CreateBook(ctx, book); err != nil {
+			return err
+		}
+		bookIDs[short] = book.ID
+	}
+
+	if name == "" {
+		name = "COMMENTARY"
+	}
+
+	_ = p.DB.DeleteTranslationByShortName(ctx, strings.ToUpper(name))
+
+	trans := &bible.Translation{
+		ShortName:       strings.ToUpper(name),
+		FullName:        name,
+		Language:        "en",
+		ModuleType:      "commentary",
+		VersificationID: versificationID,
+		CreatedAt:       time.Now(),
+		UpdatedAt:       time.Now(),
+	}
+	if err := p.DB.CreateTranslation(ctx, trans); err != nil {
+		return fmt.Errorf("create translation: %w", err)
+	}
+
+	batchSize := 5000
+	inserted := 0
+	for i := 0; i < len(recs); i += batchSize {
+		end := min(i+batchSize, len(recs))
+		batch := recs[i:end]
+
+		dbEntries := make([]db.CommentaryEntry, len(batch))
+		for j, r := range batch {
+			dbEntries[j] = db.CommentaryEntry{
+				BookID:  bookIDs[r.BookShort],
+				Chapter: r.Chapter,
+				Verse:   r.Verse,
+				Content: r.Text,
+			}
+		}
+
+		n, err := p.DB.InsertCommentaryEntries(ctx, trans.ID, dbEntries)
+		if err != nil {
+			return fmt.Errorf("insert commentary batch: %w", err)
+		}
+		inserted += int(n)
+		if progress != nil {
+			progress("inserting commentary", i+len(batch), len(recs))
+		}
+	}
+
+	fmt.Printf("Imported commentary %q: %d entries\n", name, inserted)
 	return nil
 }
 

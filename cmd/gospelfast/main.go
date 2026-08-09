@@ -19,12 +19,14 @@ import (
 
 	_ "github.com/gospelfast/gospelfast/docs"
 	httpSwagger "github.com/swaggo/http-swagger/v2"
+	"golang.org/x/crypto/bcrypt"
 )
 
 var (
 	dbURL        = envOrDefault("DATABASE_URL", "postgres://gospelfast:gospelfast@localhost:5432/gospelfast?sslmode=disable")
 	redisURL     = envOrDefault("REDIS_URL", "localhost:6379")
 	port         = envOrDefault("PORT", "8080")
+	adminPass    = envOrDefault("ADMIN_PASSWORD", "gospelfast")
 	templatesDir = envOrDefault("TEMPLATES_DIR", "web/templates")
 	staticDir    = envOrDefault("STATIC_DIR", "web/static")
 )
@@ -51,6 +53,19 @@ func main() {
 		log.Println("No translations found. Run 'gospelfast-cli seed' or 'gospelfast-cli import' to load texts.")
 	} else {
 		log.Printf("Found %d translation(s)", count)
+	}
+
+	userCount, _ := database.UserCount(ctx)
+	if userCount == 0 {
+		hash, err := bcrypt.GenerateFromPassword([]byte(adminPass), bcrypt.DefaultCost)
+		if err == nil {
+			_, err := database.CreateUser(ctx, "admin", string(hash), "admin")
+			if err != nil {
+				log.Printf("failed to seed admin user: %v", err)
+			} else {
+				log.Println("Admin user created (username: admin)")
+			}
+		}
 	}
 
 	var c *cache.Cache
@@ -90,6 +105,11 @@ func main() {
 		fmt.Fprintln(w, "OK")
 	})
 
+	// Auth
+	mux.HandleFunc("GET /login", admin.HandleLogin(database))
+	mux.HandleFunc("POST /login", admin.HandleLogin(database))
+	mux.HandleFunc("POST /logout", admin.HandleLogout)
+
 	// Web pages
 	mux.HandleFunc("GET /{$}", webHandler.Home)
 	mux.HandleFunc("GET /search", webHandler.Search)
@@ -108,22 +128,26 @@ func main() {
 	mux.HandleFunc("GET /api/search", apiHandler.Search)
 	mux.HandleFunc("GET /api/genbooks", apiHandler.ListGenbooks)
 	mux.HandleFunc("GET /api/genbooks/entry", apiHandler.GetGenbookEntry)
+	mux.HandleFunc("GET /api/commentary", apiHandler.GetCommentary)
 
-	// Admin pages
-	mux.Handle("GET /admin", admin.AuthMiddleware(http.HandlerFunc(adminWebHandler.Dashboard)))
-	mux.Handle("GET /admin/api/imports/{id}", admin.AuthMiddleware(http.HandlerFunc(adminWebHandler.ImportStatus)))
-	mux.Handle("POST /admin/api/imports", admin.AuthMiddleware(http.HandlerFunc(adminWebHandler.StartImport)))
-
-	// Admin API (basic auth)
-	mux.Handle("GET /admin/api/translations", admin.AuthMiddleware(http.HandlerFunc(adminAPIHandler.ListTranslations)))
-	mux.Handle("DELETE /admin/api/translations/{id}", admin.AuthMiddleware(http.HandlerFunc(adminAPIHandler.DeleteTranslation)))
+	// Admin pages (requires login)
+	mux.Handle("GET /admin", admin.RequireAdmin(adminWebHandler.Dashboard))
+	mux.Handle("GET /admin/api/imports/{id}", admin.RequireAdmin(adminWebHandler.ImportStatus))
+	mux.Handle("POST /admin/api/imports", admin.RequireAdmin(adminWebHandler.StartImport))
+	mux.Handle("GET /admin/api/translations", admin.RequireAdmin(adminAPIHandler.ListTranslations))
+	mux.Handle("DELETE /admin/api/translations/{id}", admin.RequireAdmin(adminAPIHandler.DeleteTranslation))
+	mux.Handle("GET /admin/api/users", admin.RequireAdmin(adminWebHandler.ListUsers))
+	mux.Handle("POST /admin/api/users", admin.RequireAdmin(adminWebHandler.CreateUser))
+	mux.Handle("DELETE /admin/api/users/{id}", admin.RequireAdmin(adminWebHandler.DeleteUser))
 
 	// Swagger
 	mux.Handle("GET /swagger/", httpSwagger.Handler(
 		httpSwagger.URL("/swagger/doc.json"),
 	))
 
-	wrapped := withLogging(withCORS(withNotFound(mux, webHandler)))
+	wrapped := admin.SessionMiddleware(database)(
+		withLogging(withCORS(withNotFound(mux, webHandler))),
+	)
 
 	server := &http.Server{
 		Addr:         ":" + port,
@@ -180,13 +204,6 @@ func withCORS(next http.Handler) http.Handler {
 	})
 }
 
-func envOrDefault(key, fallback string) string {
-	if v := os.Getenv(key); v != "" {
-		return v
-	}
-	return fallback
-}
-
 func withNotFound(next http.Handler, wh *web.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		rw := &responseWriter{ResponseWriter: w, status: 200}
@@ -195,4 +212,11 @@ func withNotFound(next http.Handler, wh *web.Handler) http.Handler {
 			wh.RenderError(w, 404, "Page not found", "The page you were looking for does not exist.")
 		}
 	})
+}
+
+func envOrDefault(key, fallback string) string {
+	if v := os.Getenv(key); v != "" {
+		return v
+	}
+	return fallback
 }

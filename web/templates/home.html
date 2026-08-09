@@ -1,14 +1,22 @@
 <div class="max-w-2xl mx-auto">
-    <h1 class="text-3xl font-bold text-center mb-8">Search the Scriptures</h1>
+    {{if .VOTDText}}
+    <div class="bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg p-5 mb-8">
+        <div class="text-xs font-medium text-blue-500 mb-2">Verse of the Day</div>
+        <p class="text-sm text-gray-800 dark:text-gray-200 leading-relaxed mb-1">{{.VOTDText}}</p>
+        <p class="text-xs text-gray-400 dark:text-gray-500">&mdash; {{.VOTDRef}}</p>
+    </div>
+    {{end}}
+
+    <h1 class="text-3xl font-bold text-center mb-8 dark:text-white">Search the Scriptures</h1>
 
     <form hx-get="/search" hx-target="#results" hx-indicator="#spinner" class="flex gap-3 mb-8">
-        <select name="t" class="border border-gray-300 rounded-lg px-3 py-2 text-sm bg-white">
+        <select name="t" class="border border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-white rounded-lg px-3 py-2 text-sm bg-white dark:bg-gray-700">
             {{range .Translations}}
             <option value="{{.ShortName}}" {{if eq .ShortName $.Selected}}selected{{end}}>{{.ShortName}}</option>
             {{end}}
         </select>
         <input type="search" name="q" placeholder="Search for verses, phrases, or words..."
-               class="flex-1 border border-gray-300 rounded-lg px-4 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+               class="flex-1 border border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-white rounded-lg px-4 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent dark:placeholder-gray-400"
                autofocus autocomplete="off">
         <button type="submit" class="bg-blue-600 text-white px-5 py-2 rounded-lg text-sm font-medium hover:bg-blue-700 transition">
             Search

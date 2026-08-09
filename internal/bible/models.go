@@ -25,6 +25,7 @@ type Translation struct {
 	ShortName        string          `json:"short_name"`
 	FullName         string          `json:"full_name"`
 	Language         string          `json:"language"`
+	ModuleType       string          `json:"module_type"`
 	VersificationID  string          `json:"versification_id"`
 	Description      string          `json:"description,omitempty"`
 	SourceURL        string          `json:"source_url,omitempty"`

@@ -11,6 +11,7 @@ import (
 	"path/filepath"
 	"strconv"
 	"strings"
+	"time"
 
 	"github.com/gospelfast/gospelfast/internal/cache"
 	"github.com/gospelfast/gospelfast/internal/db"
@@ -131,6 +132,8 @@ type homeData struct {
 	PageSize     int
 	NextPage     int
 	Results      []searchResultItem
+	VOTDRef      string
+	VOTDText     string
 }
 
 type searchResultItem struct {
@@ -154,7 +157,26 @@ func (h *Handler) Home(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
+	trans, err := h.DB.GetTranslationByShortName(ctx, "KJV")
+	if err == nil {
+		today := time.Now().Format("2006-01-02")
+		seed := int64(hashString(today))
+		verse, err := h.DB.GetRandomVerse(ctx, trans.ID, seed)
+		if err == nil {
+			data.VOTDRef = fmt.Sprintf("%s %d:%d", verse.BookName, verse.Chapter, verse.Verse)
+			data.VOTDText = verse.Text
+		}
+	}
+
 	h.renderPage(w, "home.html", data, "Gospelfast — Search", "Fast full-text search Bible study tool")
+}
+
+func hashString(s string) uint64 {
+	var h uint64 = 5381
+	for i := 0; i < len(s); i++ {
+		h = ((h << 5) + h) + uint64(s[i])
+	}
+	return h
 }
 
 func (h *Handler) Search(w http.ResponseWriter, r *http.Request) {

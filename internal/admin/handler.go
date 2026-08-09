@@ -13,6 +13,7 @@ import (
 
 	"github.com/gospelfast/gospelfast/internal/cache"
 	"github.com/gospelfast/gospelfast/internal/db"
+	"golang.org/x/crypto/bcrypt"
 )
 
 type pageData struct {
@@ -120,6 +121,7 @@ func (h *WebHandler) renderPage(w http.ResponseWriter, name string, data any, ti
 
 type dashboardData struct {
 	Translations []translationRow
+	Users        []db.User
 	Jobs         []*Job
 }
 
@@ -127,6 +129,7 @@ type translationRow struct {
 	ID         string
 	ShortName  string
 	FullName   string
+	ModuleType string
 	Language   string
 	CreatedAt  string
 	VerseCount int
@@ -135,6 +138,9 @@ type translationRow struct {
 func (h *WebHandler) Dashboard(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 	data := dashboardData{Jobs: h.Jobs.List()}
+
+	users, _ := h.DB.ListUsers(ctx)
+	data.Users = users
 
 	translations, err := h.DB.ListTranslations(ctx)
 	if err == nil {
@@ -145,6 +151,7 @@ func (h *WebHandler) Dashboard(w http.ResponseWriter, r *http.Request) {
 				ID:         t.ID,
 				ShortName:  t.ShortName,
 				FullName:   t.FullName,
+				ModuleType: t.ModuleType,
 				Language:   t.Language,
 				CreatedAt:  t.CreatedAt.Format("2006-01-02"),
 				VerseCount: verseCount,
@@ -226,4 +233,57 @@ func (h *WebHandler) ImportStatus(w http.ResponseWriter, r *http.Request) {
 	}
 
 	h.renderFragment(w, "import_status.html", map[string]any{"Job": job, "Percent": pct})
+}
+
+func (h *WebHandler) ListUsers(w http.ResponseWriter, r *http.Request) {
+	users, err := h.DB.ListUsers(r.Context())
+	if err != nil {
+		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": err.Error()})
+		return
+	}
+	type userResp struct {
+		ID        string `json:"id"`
+		Username  string `json:"username"`
+		Role      string `json:"role"`
+		CreatedAt string `json:"created_at"`
+	}
+	result := make([]userResp, len(users))
+	for i, u := range users {
+		result[i] = userResp{ID: u.ID, Username: u.Username, Role: u.Role, CreatedAt: u.CreatedAt.Format("2006-01-02")}
+	}
+	writeJSON(w, http.StatusOK, result)
+}
+
+func (h *WebHandler) CreateUser(w http.ResponseWriter, r *http.Request) {
+	username := strings.TrimSpace(r.FormValue("username"))
+	password := strings.TrimSpace(r.FormValue("password"))
+	role := strings.TrimSpace(r.FormValue("role"))
+	if role == "" {
+		role = "reader"
+	}
+	if username == "" || password == "" {
+		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "username and password required"})
+		return
+	}
+	hash, err := bcrypt.GenerateFromPassword([]byte(password), bcrypt.DefaultCost)
+	if err != nil {
+		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": err.Error()})
+		return
+	}
+	_, err = h.DB.CreateUser(r.Context(), username, string(hash), role)
+	if err != nil {
+		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": err.Error()})
+		return
+	}
+	w.WriteHeader(http.StatusCreated)
+	writeJSON(w, http.StatusCreated, map[string]string{"ok": "user created"})
+}
+
+func (h *WebHandler) DeleteUser(w http.ResponseWriter, r *http.Request) {
+	id := r.PathValue("id")
+	if err := h.DB.DeleteUser(r.Context(), id); err != nil {
+		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": err.Error()})
+		return
+	}
+	w.WriteHeader(http.StatusNoContent)
 }

@@ -2,6 +2,8 @@ package api
 
 import (
 	"net/http"
+	"strconv"
+	"strings"
 )
 
 type GenbookResponse struct {
@@ -81,4 +83,49 @@ func (h *Handler) GetGenbookEntry(w http.ResponseWriter, r *http.Request) {
 		Title:   entry.Title,
 		Content: entry.Content,
 	})
+}
+
+// @Summary      Get commentary for a verse
+// @Tags         commentary
+// @Produce      json
+// @Param        t    query  string  true  "Commentary short name"
+// @Param        book query  string  true  "Book short name"
+// @Param        ref  query  string  true  "Verse reference (e.g. Gen.1.1)"
+// @Success      200  {object}  object
+// @Router       /api/commentary [get]
+func (h *Handler) GetCommentary(w http.ResponseWriter, r *http.Request) {
+	ctx := r.Context()
+	transShort := r.URL.Query().Get("t")
+	bookShort := r.URL.Query().Get("book")
+
+	chapter, verse := 0, 0
+	if ref := r.URL.Query().Get("ref"); ref != "" {
+		parts := strings.SplitN(ref, ".", 3)
+		if len(parts) >= 2 {
+			chapter, _ = strconv.Atoi(parts[1])
+		}
+		if len(parts) >= 3 {
+			verse, _ = strconv.Atoi(parts[2])
+		}
+	}
+
+	trans, err := h.DB.GetTranslationByShortName(ctx, transShort)
+	if err != nil {
+		writeError(w, http.StatusNotFound, "translation not found")
+		return
+	}
+
+	book, err := h.DB.GetBookByShortName(ctx, trans.VersificationID, bookShort)
+	if err != nil {
+		writeError(w, http.StatusNotFound, "book not found")
+		return
+	}
+
+	entry, err := h.DB.GetCommentary(ctx, trans.ID, book.ID, chapter, verse)
+	if err != nil {
+		writeError(w, http.StatusNotFound, "no commentary for this verse")
+		return
+	}
+
+	writeJSON(w, http.StatusOK, entry)
 }
