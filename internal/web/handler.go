@@ -29,10 +29,10 @@ type pageTemplate struct {
 }
 
 type Handler struct {
-	DB       *db.DB
-	Cache    *cache.Cache
-	base     *template.Template
-	pages    map[string]*pageTemplate
+	DB           *db.DB
+	Cache        *cache.Cache
+	base         *template.Template
+	pages        map[string]*pageTemplate
 	templatesDir string
 }
 
@@ -50,21 +50,21 @@ func NewHandler(d *db.DB, c *cache.Cache, templatesDir string) (*Handler, error)
 	}
 
 	h := &Handler{
-		DB:       d,
-		Cache:    c,
-		base:     base,
-		pages:    make(map[string]*pageTemplate),
+		DB:           d,
+		Cache:        c,
+		base:         base,
+		pages:        make(map[string]*pageTemplate),
 		templatesDir: templatesDir,
 	}
 
 	pageDeps := map[string][]string{
-		"home.html":             {"search.html"},
-		"reader.html":           {"reader_chapter.html"},
-		"reader_chapter.html":   {},
-		"compare.html":          {},
-		"compare_result.html":   {},
-		"search.html":           {},
-		"genbook.html":          {},
+		"home.html":           {"search.html"},
+		"reader.html":         {"reader_chapter.html"},
+		"reader_chapter.html": {},
+		"compare.html":        {},
+		"compare_result.html": {},
+		"search.html":         {},
+		"genbook.html":        {},
 	}
 
 	for name, deps := range pageDeps {
@@ -89,6 +89,22 @@ func NewHandler(d *db.DB, c *cache.Cache, templatesDir string) (*Handler, error)
 	}
 
 	return h, nil
+}
+
+// renderFragment executes a page template on its own, without wrapping it
+// in base.html — used for htmx partial swaps where only the fragment's
+// markup should be sent back, not a full document.
+func (h *Handler) renderFragment(w http.ResponseWriter, pageName string, data any) {
+	pt, ok := h.pages[pageName]
+	if !ok {
+		http.Error(w, "template not found: "+pageName, http.StatusInternalServerError)
+		return
+	}
+
+	w.Header().Set("Content-Type", "text/html; charset=utf-8")
+	if err := pt.page.ExecuteTemplate(w, pageName, data); err != nil {
+		log.Printf("render fragment %s: %v", pageName, err)
+	}
 }
 
 func (h *Handler) renderPage(w http.ResponseWriter, pageName string, data any, title, metaDesc string) {
@@ -283,6 +299,12 @@ func (h *Handler) Reader(w http.ResponseWriter, r *http.Request) {
 	h.renderPage(w, "reader.html", data, "Gospelfast — Reader", "Read the Bible online")
 }
 
+// ReaderChapter serves just the chapter content (nav bars + verses), with
+// no surrounding page chrome. It backs the htmx-driven Prev/Next/keyboard/
+// swipe navigation in reader.html, which swaps this into #chapter-area
+// instead of doing a full page reload — the corresponding shareable/
+// reloadable URL (handled by Reader, above) is pushed into the address bar
+// via hx-push-url on the triggering links.
 func (h *Handler) ReaderChapter(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 	tShort := r.URL.Query().Get("t")
@@ -304,7 +326,7 @@ func (h *Handler) ReaderChapter(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	h.renderPage(w, "reader_chapter.html", data, "Gospelfast — Reader", "Read the Bible online")
+	h.renderFragment(w, "reader_chapter.html", data)
 }
 
 type compareData struct {

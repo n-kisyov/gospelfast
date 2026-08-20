@@ -1,21 +1,52 @@
+{{/* Prev/chapter-jump/Next controls, shared by the header and footer bars
+     below so they can never drift out of sync with each other.
+
+     The Prev/Next links are htmx-powered (swap into #chapter-area instead
+     of a full page reload) but keep a real href so they degrade to a
+     normal navigation if JS is unavailable. hx-push-url points at the
+     canonical /reader URL (handled by Reader) even though the data comes
+     from the lighter /reader/chapter fragment endpoint (ReaderChapter), so
+     the address bar, reload, and sharing all still work correctly.
+     `preload="mouseover"` (see the htmx-ext-preload script in base.html)
+     prefetches the target chapter as soon as the user hovers, so the click
+     itself feels instant. data-chapter-nav is a stable hook the keyboard/
+     swipe handlers in reader.html use to find "the current prev/next link"
+     without caring which copy (top or bottom) they grab. */}}
+{{define "chapter-nav"}}
+{{if gt .Chapter 1}}
+<a href="/reader?t={{$.Selected}}&book={{.BookShort}}&chapter={{sub .Chapter 1}}"
+   hx-get="/reader/chapter?t={{$.Selected}}&book={{.BookShort}}&chapter={{sub .Chapter 1}}"
+   hx-target="#chapter-area" hx-swap="innerHTML"
+   hx-push-url="/reader?t={{$.Selected}}&book={{.BookShort}}&chapter={{sub .Chapter 1}}"
+   preload="mouseover"
+   data-chapter-nav="prev"
+   class="text-xs bg-gray-100 dark:bg-gray-700 dark:text-gray-200 px-2 py-1 rounded hover:bg-gray-200 dark:hover:bg-gray-600"
+   aria-label="Previous chapter">&larr; Prev</a>
+{{end}}
+<form method="get" action="/reader" class="inline-flex items-center gap-1">
+    <input type="hidden" name="t" value="{{$.Selected}}">
+    <input type="hidden" name="book" value="{{.BookShort}}">
+    <input type="number" name="chapter" value="{{.Chapter}}" min="1" max="{{.ChapterCount}}"
+           aria-label="Chapter number"
+           class="border border-gray-300 dark:border-gray-600 dark:bg-gray-800 dark:text-white rounded px-2 py-1 text-sm w-16 text-center">
+    <span class="text-xs text-gray-500 dark:text-gray-400">/ {{.ChapterCount}}</span>
+    <button type="submit" class="text-xs bg-blue-50 dark:bg-blue-900 text-blue-600 dark:text-blue-300 px-2 py-1 rounded hover:bg-blue-100 dark:hover:bg-blue-800">Go</button>
+</form>
+{{if lt .Chapter .ChapterCount}}
+<a href="/reader?t={{$.Selected}}&book={{.BookShort}}&chapter={{add .Chapter 1}}"
+   hx-get="/reader/chapter?t={{$.Selected}}&book={{.BookShort}}&chapter={{add .Chapter 1}}"
+   hx-target="#chapter-area" hx-swap="innerHTML"
+   hx-push-url="/reader?t={{$.Selected}}&book={{.BookShort}}&chapter={{add .Chapter 1}}"
+   preload="mouseover"
+   data-chapter-nav="next"
+   class="text-xs bg-gray-100 dark:bg-gray-700 dark:text-gray-200 px-2 py-1 rounded hover:bg-gray-200 dark:hover:bg-gray-600"
+   aria-label="Next chapter">Next &rarr;</a>
+{{end}}
+{{end}}
+
 <div class="flex items-center gap-2 mb-6 flex-wrap">
-    <h2 class="text-xl font-semibold dark:text-white">{{.BookName}}</h2>
-    {{if gt .Chapter 1}}
-    <a href="/reader?t={{$.Selected}}&book={{.BookShort}}&chapter={{sub .Chapter 1}}"
-       class="text-xs bg-gray-100 dark:bg-gray-700 dark:text-gray-200 px-2 py-1 rounded hover:bg-gray-200 dark:hover:bg-gray-600">&larr; Prev</a>
-    {{end}}
-    <form method="get" action="/reader" class="inline-flex items-center gap-1">
-        <input type="hidden" name="t" value="{{$.Selected}}">
-        <input type="hidden" name="book" value="{{.BookShort}}">
-        <input type="number" name="chapter" value="{{.Chapter}}" min="1" max="{{.ChapterCount}}"
-               class="border border-gray-300 dark:border-gray-600 dark:bg-gray-800 dark:text-white rounded px-2 py-1 text-sm w-16 text-center">
-        <span class="text-xs text-gray-500 dark:text-gray-400">/ {{.ChapterCount}}</span>
-        <button type="submit" class="text-xs bg-blue-50 dark:bg-blue-900 text-blue-600 dark:text-blue-300 px-2 py-1 rounded hover:bg-blue-100 dark:hover:bg-blue-800">Go</button>
-    </form>
-    {{if lt .Chapter .ChapterCount}}
-    <a href="/reader?t={{$.Selected}}&book={{.BookShort}}&chapter={{add .Chapter 1}}"
-       class="text-xs bg-gray-100 dark:bg-gray-700 dark:text-gray-200 px-2 py-1 rounded hover:bg-gray-200 dark:hover:bg-gray-600">Next &rarr;</a>
-    {{end}}
+    <h2 class="text-xl font-semibold dark:text-white mr-1">{{.BookName}}</h2>
+    {{template "chapter-nav" .}}
 </div>
 
 <div class="bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg p-6">
@@ -36,6 +67,16 @@
     </div>
     {{end}}
 </div>
+
+{{/* Bottom mirror of the top nav bar, so switching chapters never requires
+     scrolling back up first. Also offers a quick way back to the top. */}}
+<div class="flex items-center justify-center gap-2 mt-4 flex-wrap">
+    {{template "chapter-nav" .}}
+    <a href="#" onclick="window.scrollTo({top:0,behavior:'smooth'});return false;"
+       class="text-xs text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-200 px-2 py-1"
+       aria-label="Back to top">&uarr; Top</a>
+</div>
+
 <script>
 function copyVerse(text) {
     function show(msg, isErr) {
@@ -58,4 +99,19 @@ function copyVerse(text) {
     try { document.execCommand('copy'); show('Copied!', false); } catch(e) { show('Copy failed', true); }
     document.body.removeChild(ta);
 }
+
+// Remember this position so a bare "/reader" visit (nav link, bookmark, or
+// typed URL) can resume here later — see the redirect + nav-link rewrite
+// in base.html. This block re-runs on every htmx chapter swap (not just
+// the first load), which is intentional: it's a plain idempotent write,
+// not a listener, so it just keeps the saved position current. Keyboard
+// and swipe navigation live in reader.html instead, since those ARE
+// listeners and must only be bound once — see the comment there.
+try {
+    localStorage.setItem('gospelfast_last_read', JSON.stringify({
+        t: {{$.Selected}},
+        book: {{.BookShort}},
+        chapter: {{.Chapter}}
+    }));
+} catch (e) {}
 </script>
