@@ -58,6 +58,45 @@ func TestParseContainerFormat(t *testing.T) {
 	}
 }
 
+// TestParseContainerFormatWithNestedMarkup guards against a bug where only
+// the first CharData run of a container-style <verse> was kept: text after
+// a nested inline element (<note>, <transChange>, <seg>, ...) was silently
+// dropped because currentVerse got reset after the first chunk fired the
+// handler.
+func TestParseContainerFormatWithNestedMarkup(t *testing.T) {
+	data, err := os.ReadFile(filepath.Join("testdata", "test_osis_nested.xml"))
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	type verseRec struct {
+		chapter int
+		verse   int
+		text    string
+	}
+	var verses []verseRec
+
+	_, err = Parse(bytes.NewReader(data), func(book string, chapter, verse int, text string) error {
+		verses = append(verses, verseRec{chapter, verse, text})
+		return nil
+	})
+	if err != nil {
+		t.Fatalf("Parse failed: %v", err)
+	}
+
+	if len(verses) != 2 {
+		t.Fatalf("got %d verses, want 2", len(verses))
+	}
+	want0 := "In the very beginning God created the heaven and the earth."
+	if verses[0].text != want0 {
+		t.Errorf("verse[0].text = %q, want %q", verses[0].text, want0)
+	}
+	want1 := "And the earth was without form, and void."
+	if verses[1].text != want1 {
+		t.Errorf("verse[1].text = %q, want %q", verses[1].text, want1)
+	}
+}
+
 func TestParseMilestoneFormat(t *testing.T) {
 	data, err := os.ReadFile(filepath.Join("testdata", "test_osis_milestone.xml"))
 	if err != nil {

@@ -2,6 +2,8 @@ package main
 
 import (
 	"context"
+	"crypto/rand"
+	"encoding/hex"
 	"fmt"
 	"log"
 	"net/http"
@@ -26,7 +28,7 @@ var (
 	dbURL        = envOrDefault("DATABASE_URL", "postgres://gospelfast:gospelfast@localhost:5432/gospelfast?sslmode=disable")
 	redisURL     = envOrDefault("REDIS_URL", "localhost:6379")
 	port         = envOrDefault("PORT", "8080")
-	adminPass    = envOrDefault("ADMIN_PASSWORD", "gospelfast")
+	adminPass    = os.Getenv("ADMIN_PASSWORD")
 	templatesDir = envOrDefault("TEMPLATES_DIR", "web/templates")
 	staticDir    = envOrDefault("STATIC_DIR", "web/static")
 )
@@ -57,11 +59,23 @@ func main() {
 
 	userCount, _ := database.UserCount(ctx)
 	if userCount == 0 {
+		generated := false
+		if adminPass == "" {
+			adminPass = generateRandomPassword()
+			generated = true
+		}
 		hash, err := bcrypt.GenerateFromPassword([]byte(adminPass), bcrypt.DefaultCost)
 		if err == nil {
 			_, err := database.CreateUser(ctx, "admin", string(hash), "admin")
 			if err != nil {
 				log.Printf("failed to seed admin user: %v", err)
+			} else if generated {
+				log.Println("=====================================================")
+				log.Println("No ADMIN_PASSWORD set. Generated one-time admin login:")
+				log.Println("  username: admin")
+				log.Printf("  password: %s\n", adminPass)
+				log.Println("Set ADMIN_PASSWORD to control this on future deploys.")
+				log.Println("=====================================================")
 			} else {
 				log.Println("Admin user created (username: admin)")
 			}
@@ -108,7 +122,7 @@ func main() {
 	// Auth
 	mux.HandleFunc("GET /login", admin.HandleLogin(database))
 	mux.HandleFunc("POST /login", admin.HandleLogin(database))
-	mux.HandleFunc("POST /logout", admin.HandleLogout)
+	mux.HandleFunc("POST /logout", admin.HandleLogout(database))
 
 	// Web pages
 	mux.HandleFunc("GET /{$}", webHandler.Home)
@@ -146,8 +160,17 @@ func main() {
 		httpSwagger.URL("/swagger/doc.json"),
 	))
 
+	// Catch-all: only reached when no other pattern above matched the
+	// request at all, so it's safe to render the pretty 404 page here.
+	// (Handlers that legitimately return a 404 for a matched route, e.g.
+	// "translation not found", write their own complete response and
+	// must NOT be touched again after the fact.)
+	mux.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
+		webHandler.RenderError(w, http.StatusNotFound, "Page not found", "The page you were looking for does not exist.")
+	})
+
 	wrapped := admin.SessionMiddleware(database)(
-		withRecovery(withLogging(withCORS(withNotFound(mux, webHandler)))),
+		withRecovery(withLogging(withCORS(mux))),
 	)
 
 	server := &http.Server{
@@ -205,16 +228,6 @@ func withCORS(next http.Handler) http.Handler {
 	})
 }
 
-func withNotFound(next http.Handler, wh *web.Handler) http.Handler {
-	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		rw := &responseWriter{ResponseWriter: w, status: 200}
-		next.ServeHTTP(rw, r)
-		if rw.status == http.StatusNotFound {
-			wh.RenderError(w, 404, "Page not found", "The page you were looking for does not exist.")
-		}
-	})
-}
-
 func withRecovery(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		defer func() {
@@ -225,6 +238,16 @@ func withRecovery(next http.Handler) http.Handler {
 		}()
 		next.ServeHTTP(w, r)
 	})
+}
+
+func generateRandomPassword() string {
+	b := make([]byte, 16)
+	if _, err := rand.Read(b); err != nil {
+		// crypto/rand failing is effectively unreachable in practice; fall
+		// back to a fixed-but-loud placeholder rather than panicking.
+		return "CHANGE-ME-" + time.Now().Format("20060102150405")
+	}
+	return hex.EncodeToString(b)
 }
 
 func envOrDefault(key, fallback string) string {

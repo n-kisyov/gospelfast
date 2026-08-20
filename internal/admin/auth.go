@@ -98,15 +98,21 @@ func HandleLogin(database *db.DB) http.HandlerFunc {
 	}
 }
 
-func HandleLogout(w http.ResponseWriter, r *http.Request) {
-	http.SetCookie(w, &http.Cookie{
-		Name:     sessionCookie,
-		Value:    "",
-		Path:     "/",
-		MaxAge:   -1,
-		HttpOnly: true,
-	})
-	http.Redirect(w, r, "/login", http.StatusSeeOther)
+func HandleLogout(database *db.DB) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		if cookie, err := r.Cookie(sessionCookie); err == nil {
+			_ = database.DeleteSession(r.Context(), cookie.Value)
+		}
+
+		http.SetCookie(w, &http.Cookie{
+			Name:     sessionCookie,
+			Value:    "",
+			Path:     "/",
+			MaxAge:   -1,
+			HttpOnly: true,
+		})
+		http.Redirect(w, r, "/login", http.StatusSeeOther)
+	}
 }
 
 const loginPageHTML = `<!DOCTYPE html>

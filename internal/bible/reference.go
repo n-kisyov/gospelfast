@@ -2,6 +2,7 @@ package bible
 
 import (
 	"fmt"
+	"sort"
 	"strconv"
 	"strings"
 )
@@ -224,6 +225,20 @@ func trimTrailing(s string) string {
 	return s
 }
 
+// bookNamesSorted holds the keys of bookNameToShort in a fixed, deterministic
+// order so prefix matching below doesn't depend on Go's randomized map
+// iteration order.
+var bookNamesSorted = sortedBookNames()
+
+func sortedBookNames() []string {
+	names := make([]string, 0, len(bookNameToShort))
+	for name := range bookNameToShort {
+		names = append(names, name)
+	}
+	sort.Strings(names)
+	return names
+}
+
 func ShortToBookName(short string) string {
 	if name, ok := shortNameToBook[strings.ToLower(short)]; ok {
 		return name
@@ -246,9 +261,9 @@ func extractBookName(ref string) (shortName, remainder string, err error) {
 
 	for n := len(words) - 1; n >= 1; n-- {
 		candidate := strings.ToLower(strings.Join(words[:n], " "))
-		for name, short := range bookNameToShort {
+		for _, name := range bookNamesSorted {
 			if strings.HasPrefix(name, candidate) {
-				return short, strings.Join(words[n:], " "), nil
+				return bookNameToShort[name], strings.Join(words[n:], " "), nil
 			}
 		}
 	}

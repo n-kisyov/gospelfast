@@ -476,15 +476,36 @@ func (db *DB) DeleteUser(ctx context.Context, id string) error {
 	return err
 }
 
+// GetRandomVerse deterministically picks a verse for the given seed (e.g. a
+// hash of today's date, so "verse of the day" stays stable all day) while
+// spreading picks uniformly across the whole translation. It previously
+// ordered by (id*seed) % 7919, which — since 7919 is prime and virtually
+// every seed is coprime to it — collapsed to always favoring the handful of
+// verses whose id happens to be a multiple of 7919, regardless of seed.
 func (db *DB) GetRandomVerse(ctx context.Context, translationID string, seed int64) (*bible.Verse, error) {
+	var count int64
+	if err := db.Pool.QueryRow(ctx, `
+		SELECT COUNT(*) FROM verses WHERE translation_id = $1
+	`, translationID).Scan(&count); err != nil {
+		return nil, err
+	}
+	if count == 0 {
+		return nil, pgx.ErrNoRows
+	}
+
+	if seed < 0 {
+		seed = -seed
+	}
+	offset := seed % count
+
 	v := &bible.Verse{}
 	err := db.Pool.QueryRow(ctx, `
 		SELECT v.id, v.translation_id, v.book_id, v.chapter, v.verse, v.text, b.name, b.short_name
 		FROM verses v JOIN books b ON b.id = v.book_id
 		WHERE v.translation_id = $1
-		ORDER BY (v.id * $2) % 7919
-		LIMIT 1
-	`, translationID, seed).Scan(&v.ID, &v.TranslationID, &v.BookID, &v.Chapter, &v.Verse, &v.Text, &v.BookName, &v.BookShortName)
+		ORDER BY v.id
+		OFFSET $2 LIMIT 1
+	`, translationID, offset).Scan(&v.ID, &v.TranslationID, &v.BookID, &v.Chapter, &v.Verse, &v.Text, &v.BookName, &v.BookShortName)
 	if err != nil {
 		return nil, err
 	}
