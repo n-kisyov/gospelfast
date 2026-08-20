@@ -58,31 +58,44 @@ func (m *JobManager) Start(source, name, format string) *Job {
 
 	m.mu.Lock()
 	m.jobs[id] = job
+	snapshot := *job
 	m.mu.Unlock()
 
 	go m.run(context.Background(), job, format)
 
-	return job
+	return &snapshot
 }
 
+// Get returns a point-in-time copy of the job so callers can read its
+// fields without racing the background goroutine in run(), which mutates
+// the shared *Job under m.mu.
 func (m *JobManager) Get(id string) *Job {
 	m.mu.Lock()
 	defer m.mu.Unlock()
-	return m.jobs[id]
+	j, ok := m.jobs[id]
+	if !ok {
+		return nil
+	}
+	snapshot := *j
+	return &snapshot
 }
 
+// List returns point-in-time copies of all jobs; see Get.
 func (m *JobManager) List() []*Job {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 	jobs := make([]*Job, 0, len(m.jobs))
 	for _, j := range m.jobs {
-		jobs = append(jobs, j)
+		snapshot := *j
+		jobs = append(jobs, &snapshot)
 	}
 	return jobs
 }
 
 func (m *JobManager) run(ctx context.Context, job *Job, format string) {
+	m.mu.Lock()
 	job.Status = StatusProcessing
+	m.mu.Unlock()
 
 	var f importpkg.Format
 	switch format {

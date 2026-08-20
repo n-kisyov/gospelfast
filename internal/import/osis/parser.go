@@ -26,13 +26,16 @@ type parser struct {
 	handler VerseHandler
 	data    ParsedData
 
-	currentBook    string
-	currentChapter int
-	currentVerse   int
-	inMilestone    bool
-	milestoneBuf   strings.Builder
-	inTitle        bool
-	titleBuf       strings.Builder
+	currentBook      string
+	currentChapter   int
+	currentVerse     int
+	inMilestone      bool
+	milestoneBuf     strings.Builder
+	inTitle          bool
+	titleBuf         strings.Builder
+	inContainerVerse bool
+	verseBuf         strings.Builder
+	noteDepth        int
 }
 
 func Parse(r io.Reader, handler VerseHandler) (*ParsedData, error) {
@@ -75,6 +78,10 @@ func (p *parser) handleStart(e xml.StartElement) {
 		if v := attr(e, "osisIDWork"); v != "" {
 			p.data.Title = v
 		}
+	case "note":
+		// Footnotes are editorial content, not part of the verse text
+		// itself — exclude them from both milestone and container buffers.
+		p.noteDepth++
 	case "div":
 		if attr(e, "type") == "book" {
 			p.currentBook = attr(e, "osisID")
@@ -122,6 +129,8 @@ func (p *parser) handleStart(e xml.StartElement) {
 		osisID := attr(e, "osisID")
 		if osisID != "" {
 			p.currentVerse = extractVerse(osisID)
+			p.inContainerVerse = true
+			p.verseBuf.Reset()
 		}
 	}
 }
@@ -130,13 +139,19 @@ func (p *parser) handleEnd(e xml.EndElement) {
 	name := stripNS(e.Name.Local)
 
 	switch name {
+	case "note":
+		if p.noteDepth > 0 {
+			p.noteDepth--
+		}
 	case "div":
 		p.currentBook = ""
 		p.currentChapter = 0
 		p.currentVerse = 0
+		p.inContainerVerse = false
 	case "chapter":
 		p.currentChapter = 0
 		p.currentVerse = 0
+		p.inContainerVerse = false
 	case "title":
 		if p.inTitle {
 			p.inTitle = false
@@ -150,12 +165,20 @@ func (p *parser) handleEnd(e xml.EndElement) {
 		}
 	case "verse":
 		if !p.inMilestone {
+			if p.inContainerVerse && p.currentVerse > 0 && p.handler != nil {
+				_ = p.handler(p.currentBook, p.currentChapter, p.currentVerse,
+					strings.TrimSpace(p.verseBuf.String()))
+			}
+			p.inContainerVerse = false
 			p.currentVerse = 0
 		}
 	}
 }
 
 func (p *parser) handleChars(data string) {
+	if p.noteDepth > 0 {
+		return
+	}
 	if p.inMilestone {
 		p.milestoneBuf.WriteString(data)
 		return
@@ -164,9 +187,14 @@ func (p *parser) handleChars(data string) {
 		p.titleBuf.WriteString(data)
 		return
 	}
-	if p.currentVerse > 0 && p.handler != nil {
-		_ = p.handler(p.currentBook, p.currentChapter, p.currentVerse, strings.TrimSpace(data))
-		p.currentVerse = 0
+	// Container-style verses (<verse osisID="..">text<note>..</note>more
+	// text</verse>) can contain several CharData runs split up by nested
+	// inline elements (notes, transChange, w, etc). Buffer them all and
+	// fire the handler once, at </verse> in handleEnd, instead of firing
+	// (and resetting currentVerse) on the very first run and silently
+	// dropping everything after the first nested tag.
+	if p.inContainerVerse && p.currentVerse > 0 {
+		p.verseBuf.WriteString(data)
 	}
 }
 

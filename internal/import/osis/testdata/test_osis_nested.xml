@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<osis xmlns="http://www.bibletechnologies.net/2003/OSIS/namespace">
+  <osisText osisIDWork="TEST">
+    <div type="book" osisID="Gen" canonical="true">
+      <chapter osisID="Gen.1">
+        <verse osisID="Gen.1.1">In the <transChange type="added">very</transChange> beginning God created the heaven<note>a footnote</note> and the earth.</verse>
+        <verse osisID="Gen.1.2">And the earth was <seg>without form</seg>, and void.</verse>
+      </chapter>
+    </div>
+  </osisText>
+</osis>

@@ -98,26 +98,45 @@ func HandleLogin(database *db.DB) http.HandlerFunc {
 	}
 }
 
-func HandleLogout(w http.ResponseWriter, r *http.Request) {
-	http.SetCookie(w, &http.Cookie{
-		Name:     sessionCookie,
-		Value:    "",
-		Path:     "/",
-		MaxAge:   -1,
-		HttpOnly: true,
-	})
-	http.Redirect(w, r, "/login", http.StatusSeeOther)
+func HandleLogout(database *db.DB) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		if cookie, err := r.Cookie(sessionCookie); err == nil {
+			_ = database.DeleteSession(r.Context(), cookie.Value)
+		}
+
+		http.SetCookie(w, &http.Cookie{
+			Name:     sessionCookie,
+			Value:    "",
+			Path:     "/",
+			MaxAge:   -1,
+			HttpOnly: true,
+		})
+		http.Redirect(w, r, "/login", http.StatusSeeOther)
+	}
 }
 
 const loginPageHTML = `<!DOCTYPE html>
 <html lang="en">
 <head>
     <meta charset="UTF-8">
+    <script>
+        // Match the theme chosen elsewhere in the app before first paint,
+        // so this page doesn't flash a light background (or ignore dark
+        // mode entirely) while the stylesheet/JS is still loading.
+        (function () {
+            if (localStorage.getItem('dark') === 'true') {
+                document.documentElement.classList.add('dark');
+            }
+        })();
+    </script>
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Gospelfast — Login</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
     <link href="/static/css/tailwind.css" rel="stylesheet">
 </head>
-<body class="bg-gray-50 dark:bg-gray-900 min-h-screen flex items-center justify-center">
+<body class="font-sans bg-gray-50 dark:bg-gray-900 min-h-screen flex items-center justify-center">
 <main class="max-w-sm w-full px-4">
 <div class="bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg p-6">
     <h1 class="text-xl font-bold text-center mb-6 text-gray-900 dark:text-white">Gospelfast</h1>

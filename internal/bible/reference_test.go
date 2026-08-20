@@ -53,6 +53,31 @@ func TestParseRef(t *testing.T) {
 	}
 }
 
+// TestParseRefPrefixIsDeterministic guards against a bug where ambiguous
+// abbreviation prefixes (matching multiple full book names, e.g. "ph" ->
+// philippians/philemon) resolved to a different book on every call because
+// the fallback matcher ranged over a Go map, whose iteration order is
+// randomized per range.
+func TestParseRefPrefixIsDeterministic(t *testing.T) {
+	for _, input := range []string{"Ph 4:13", "Jo 3:16", "1 Th 5:1"} {
+		ref, err := ParseRef(input)
+		if err != nil {
+			t.Fatalf("ParseRef(%q) error: %v", input, err)
+		}
+		want := ref.BookShortName
+		for i := 0; i < 50; i++ {
+			got, err := ParseRef(input)
+			if err != nil {
+				t.Fatalf("ParseRef(%q) error: %v", input, err)
+			}
+			if got.BookShortName != want {
+				t.Fatalf("ParseRef(%q) is non-deterministic: got %q on call %d, want %q (from first call)",
+					input, got.BookShortName, i, want)
+			}
+		}
+	}
+}
+
 func TestParseRefErrors(t *testing.T) {
 	bad := []string{"", "  ", "invalid", "xyz 1:1"}
 	for _, input := range bad {

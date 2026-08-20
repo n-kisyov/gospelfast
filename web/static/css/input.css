@@ -1,3 +1,21 @@
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
+
+@layer base {
+  /* Search-match highlighting (from ts_headline's <mark> wrapper). Browsers
+     default this to a harsh pure-yellow/black combo that clashes with the
+     app's warm palette in both themes, so give it an explicit look tied to
+     the accent scale instead. */
+  mark {
+    background-color: theme('colors.blue.200');
+    color: theme('colors.blue.900');
+    border-radius: 0.2em;
+    padding: 0 0.15em;
+  }
+
+  html.dark mark {
+    background-color: theme('colors.blue.800');
+    color: theme('colors.blue.100');
+  }
+}

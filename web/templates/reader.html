@@ -1,6 +1,6 @@
 <div class="flex gap-6">
     <aside class="w-52 flex-shrink-0">
-        <select id="trans-picker" class="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm mb-4 bg-white"
+        <select id="trans-picker" class="w-full border border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-white rounded-lg px-3 py-2 text-sm mb-4 bg-white"
                 onchange="window.location='/reader?t='+this.value+'&book={{.BookShort}}&chapter={{.Chapter}}'">
             {{range .Translations}}
             <option value="{{.ShortName}}" {{if eq .ShortName $.Selected}}selected{{end}}>{{.ShortName}}</option>
@@ -10,7 +10,7 @@
         <nav class="space-y-0.5 max-h-[calc(100vh-250px)] overflow-y-auto">
             {{range .Books}}
             <a href="/reader?t={{$.Selected}}&book={{.ShortName}}&chapter=1"
-               class="block text-sm px-2 py-1 rounded {{if eq .ShortName $.BookShort}}bg-blue-50 text-blue-700 font-medium{{else}}text-gray-600 hover:bg-gray-100{{end}}">
+               class="block text-sm px-2 py-1 rounded {{if eq .ShortName $.BookShort}}bg-blue-50 text-blue-700 font-medium dark:bg-blue-900 dark:text-blue-300{{else}}text-gray-600 hover:bg-gray-100 dark:text-gray-300 dark:hover:bg-gray-700{{end}}">
                 {{.Name}}
             </a>
             {{end}}
@@ -19,16 +19,69 @@
 
     <div class="flex-1 min-w-0">
         {{if .Books}}
-        <div id="chapter-area">
+        <div id="chapter-area" hx-ext="preload">
             {{template "reader_chapter.html" .}}
         </div>
         {{else}}
-        <div class="bg-white border border-gray-200 rounded-lg p-8 text-center">
-            <p class="text-gray-500 mb-2">{{.Selected}} is a general book, not a Bible text.</p>
-            <a href="/genbook?t={{.Selected}}" class="text-blue-600 hover:underline text-sm">
+        <div class="bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg p-8 text-center">
+            <p class="text-gray-500 dark:text-gray-400 mb-2">{{.Selected}} is a general book, not a Bible text.</p>
+            <a href="/genbook?t={{.Selected}}" class="text-blue-600 dark:text-blue-400 hover:underline text-sm">
                 Browse it in the Books section &rarr;
             </a>
         </div>
         {{end}}
     </div>
 </div>
+
+<script>
+(function() {
+    // These listeners are bound once here (reader.html is the persistent
+    // parent — only #chapter-area's innerHTML gets swapped by htmx on
+    // Prev/Next, never this script), rather than in reader_chapter.html
+    // itself, which re-runs on every swap: attaching them there would
+    // stack up a new duplicate listener per chapter navigated. Reading
+    // the current Prev/Next links live via data-chapter-nav means these
+    // stay correct after every swap with no rebinding needed.
+    var area = document.getElementById('chapter-area');
+    if (!area) return;
+
+    document.body.addEventListener('htmx:afterSwap', function(e) {
+        if (e.detail && e.detail.target === area) {
+            window.scrollTo(0, 0);
+        }
+    });
+
+    document.addEventListener('keydown', function(e) {
+        if (e.altKey || e.ctrlKey || e.metaKey || e.shiftKey) return;
+        var tag = (e.target.tagName || '').toLowerCase();
+        if (tag === 'input' || tag === 'select' || tag === 'textarea' || e.target.isContentEditable) return;
+
+        if (e.key === 'ArrowLeft') {
+            var prev = area.querySelector('[data-chapter-nav="prev"]');
+            if (prev) prev.click();
+        } else if (e.key === 'ArrowRight') {
+            var next = area.querySelector('[data-chapter-nav="next"]');
+            if (next) next.click();
+        }
+    });
+
+    // Swipe left/right over the chapter content for the same prev/next
+    // navigation as the keyboard/buttons — common mobile reading gesture.
+    var startX = null, startY = null;
+    area.addEventListener('touchstart', function(e) {
+        if (e.touches.length !== 1) return;
+        startX = e.touches[0].clientX;
+        startY = e.touches[0].clientY;
+    }, {passive: true});
+    area.addEventListener('touchend', function(e) {
+        if (startX === null) return;
+        var dx = e.changedTouches[0].clientX - startX;
+        var dy = e.changedTouches[0].clientY - startY;
+        startX = null; startY = null;
+        // Ignore short or mostly-vertical drags (page scrolling).
+        if (Math.abs(dx) < 60 || Math.abs(dx) < Math.abs(dy) * 1.5) return;
+        var link = area.querySelector(dx > 0 ? '[data-chapter-nav="prev"]' : '[data-chapter-nav="next"]');
+        if (link) link.click();
+    }, {passive: true});
+})();
+</script>

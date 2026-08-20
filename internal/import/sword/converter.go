@@ -169,8 +169,12 @@ func extractZip(zipPath, dest string) error {
 	}
 	defer r.Close()
 
+	destClean := filepath.Clean(dest) + string(os.PathSeparator)
 	for _, f := range r.File {
 		path := filepath.Join(dest, f.Name)
+		if !strings.HasPrefix(filepath.Clean(path)+string(os.PathSeparator), destClean) {
+			return fmt.Errorf("illegal file path in zip: %q escapes extraction dir", f.Name)
+		}
 		if f.FileInfo().IsDir() {
 			os.MkdirAll(path, 0755)
 			continue
