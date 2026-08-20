@@ -9,7 +9,7 @@
         <input type="hidden" name="book" value="{{.BookShort}}">
         <input type="number" name="chapter" value="{{.Chapter}}" min="1" max="{{.ChapterCount}}"
                class="border border-gray-300 dark:border-gray-600 dark:bg-gray-800 dark:text-white rounded px-2 py-1 text-sm w-16 text-center">
-        <span class="text-xs text-gray-400">/ {{.ChapterCount}}</span>
+        <span class="text-xs text-gray-500 dark:text-gray-400">/ {{.ChapterCount}}</span>
         <button type="submit" class="text-xs bg-blue-50 dark:bg-blue-900 text-blue-600 dark:text-blue-300 px-2 py-1 rounded hover:bg-blue-100 dark:hover:bg-blue-800">Go</button>
     </form>
     {{if lt .Chapter .ChapterCount}}
@@ -22,16 +22,16 @@
     <div id="toast" class="fixed top-4 right-4 bg-green-600 text-white text-sm px-4 py-2 rounded-lg shadow-lg z-50 hidden"></div>
     {{range .Verses}}
     <div class="flex gap-3 py-1 border-b border-gray-50 dark:border-gray-700 last:border-0 group">
-        <span class="text-xs font-medium text-blue-500 w-6 flex-shrink-0 text-right pt-0.5 cursor-pointer"
+        <span class="text-xs font-medium text-blue-600 dark:text-blue-400 w-6 flex-shrink-0 text-right pt-0.5 cursor-pointer"
               hx-get="/api/commentary?t=KINGCOMMENTS&book={{$.BookShort}}&ref={{$.BookShort}}.{{$.Chapter}}.{{.Verse}}"
               hx-target="next .commentary-spot" hx-swap="innerHTML" hx-trigger="click"
               title="Click for commentary">{{.Verse}}</span>
         <div class="flex-1 min-w-0">
-            <p class="text-sm text-gray-800 dark:text-gray-200 leading-relaxed">{{.Text}}</p>
+            <p class="font-serif text-[15px] text-gray-800 dark:text-gray-200 leading-relaxed">{{.Text}}</p>
             <div class="commentary-spot"></div>
         </div>
         <button onclick="copyVerse('{{$.BookName}} {{$.Chapter}}:{{.Verse}} — {{.Text}}')"
-                class="opacity-0 group-hover:opacity-100 transition-opacity text-xs text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 flex-shrink-0 mt-0.5"
+                class="opacity-0 group-hover:opacity-100 transition-opacity text-xs text-gray-500 dark:text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 flex-shrink-0 mt-0.5"
                 title="Copy verse">📋</button>
     </div>
     {{end}}

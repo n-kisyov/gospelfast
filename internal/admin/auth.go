@@ -131,9 +131,12 @@ const loginPageHTML = `<!DOCTYPE html>
     </script>
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Gospelfast — Login</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
     <link href="/static/css/tailwind.css" rel="stylesheet">
 </head>
-<body class="bg-gray-50 dark:bg-gray-900 min-h-screen flex items-center justify-center">
+<body class="font-sans bg-gray-50 dark:bg-gray-900 min-h-screen flex items-center justify-center">
 <main class="max-w-sm w-full px-4">
 <div class="bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg p-6">
     <h1 class="text-xl font-bold text-center mb-6 text-gray-900 dark:text-white">Gospelfast</h1>

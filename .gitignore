@@ -36,3 +36,5 @@ test.txt
 
 # Tailwind standalone CLI
 /tailwindcss
+
+.claude/

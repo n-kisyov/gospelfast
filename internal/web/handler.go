@@ -448,7 +448,7 @@ func (h *Handler) RenderError(w http.ResponseWriter, code int, title, msg string
 				<div class="text-6xl font-bold text-gray-200 dark:text-gray-700 mb-4">%d</div>
 				<h1 class="text-xl font-semibold text-gray-800 dark:text-gray-200 mb-2">%s</h1>
 				<p class="text-gray-500 dark:text-gray-400 mb-6">%s</p>
-				<a href="/" class="text-blue-600 hover:underline text-sm">Go home</a>
+				<a href="/" class="text-blue-600 dark:text-blue-400 hover:underline text-sm">Go home</a>
 			</div>`, code, title, msg)),
 	}
 	_ = h.base.ExecuteTemplate(w, "base.html", pd)
