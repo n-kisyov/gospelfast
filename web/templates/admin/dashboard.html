@@ -62,10 +62,12 @@
                     </td>
                     <td class="px-4 py-2 text-gray-500 dark:text-gray-400 text-xs">{{.CreatedAt.Format "2006-01-02"}}</td>
                     <td class="px-4 py-2">
+                        <button onclick="var p=prompt('New password for {{.Username}}:'); if(p) fetch('/admin/api/users/{{.ID}}/password',{method:'PUT',body:new URLSearchParams({password:p}),headers:{'Content-Type':'application/x-www-form-urlencoded'}}).then(r=>{if(r.ok)location.reload();else alert('Failed')})"
+                                class="text-blue-500 hover:text-blue-700 text-xs font-medium mr-2">Pwd</button>
                         <button hx-delete="/admin/api/users/{{.ID}}"
                                 hx-confirm="Delete user {{.Username}}?"
                                 hx-target="closest tr" hx-swap="outerHTML"
-                                class="text-red-500 hover:text-red-700 text-xs font-medium">Delete</button>
+                                class="text-red-500 hover:text-red-700 text-xs font-medium">Del</button>
                     </td>
                 </tr>
                 {{else}}

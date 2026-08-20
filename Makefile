@@ -21,10 +21,10 @@ test:
 	go test ./...
 
 css:
-	cd web && npx tailwindcss -i ./static/css/input.css -o ./static/css/tailwind.css --minify
+	./tailwindcss -i ./web/static/css/input.css -o ./web/static/css/tailwind.css --minify
 
 css-watch:
-	cd web && npx tailwindcss -i ./static/css/input.css -o ./static/css/tailwind.css --watch
+	./tailwindcss -i ./web/static/css/input.css -o ./web/static/css/tailwind.css --watch
 
 dev: css
 	go run ./cmd/$(APP)/

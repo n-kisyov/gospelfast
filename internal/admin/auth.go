@@ -115,8 +115,7 @@ const loginPageHTML = `<!DOCTYPE html>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Gospelfast — Login</title>
-    <script src="https://cdn.tailwindcss.com"></script>
-    <script>tailwind.config = { darkMode: 'class' }</script>
+    <link href="/static/css/tailwind.css" rel="stylesheet">
 </head>
 <body class="bg-gray-50 dark:bg-gray-900 min-h-screen flex items-center justify-center">
 <main class="max-w-sm w-full px-4">

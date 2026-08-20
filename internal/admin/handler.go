@@ -267,16 +267,44 @@ func (h *WebHandler) CreateUser(w http.ResponseWriter, r *http.Request) {
 	}
 	hash, err := bcrypt.GenerateFromPassword([]byte(password), bcrypt.DefaultCost)
 	if err != nil {
-		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": err.Error()})
+		log.Printf("bcrypt error: %v", err)
+		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "internal error"})
 		return
 	}
 	_, err = h.DB.CreateUser(r.Context(), username, string(hash), role)
 	if err != nil {
-		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": err.Error()})
+		log.Printf("create user error: %v", err)
+		if strings.Contains(err.Error(), "duplicate key") || strings.Contains(err.Error(), "23505") {
+			writeJSON(w, http.StatusConflict, map[string]string{"error": "username already exists"})
+			return
+		}
+		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "could not create user"})
 		return
 	}
 	w.WriteHeader(http.StatusCreated)
 	writeJSON(w, http.StatusCreated, map[string]string{"ok": "user created"})
+}
+
+func (h *WebHandler) UpdateUserPassword(w http.ResponseWriter, r *http.Request) {
+	id := r.PathValue("id")
+	password := strings.TrimSpace(r.FormValue("password"))
+	if id == "" || password == "" {
+		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "id and password required"})
+		return
+	}
+	hash, err := bcrypt.GenerateFromPassword([]byte(password), bcrypt.DefaultCost)
+	if err != nil {
+		log.Printf("bcrypt error: %v", err)
+		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "internal error"})
+		return
+	}
+	_, err = h.DB.Pool.Exec(r.Context(), `UPDATE users SET password_hash = $1 WHERE id = $2`, string(hash), id)
+	if err != nil {
+		log.Printf("update password error: %v", err)
+		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "could not update password"})
+		return
+	}
+	writeJSON(w, http.StatusOK, map[string]string{"ok": "password updated"})
 }
 
 func (h *WebHandler) DeleteUser(w http.ResponseWriter, r *http.Request) {

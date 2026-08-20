@@ -139,6 +139,7 @@ func main() {
 	mux.Handle("GET /admin/api/users", admin.RequireAdmin(adminWebHandler.ListUsers))
 	mux.Handle("POST /admin/api/users", admin.RequireAdmin(adminWebHandler.CreateUser))
 	mux.Handle("DELETE /admin/api/users/{id}", admin.RequireAdmin(adminWebHandler.DeleteUser))
+	mux.Handle("PUT /admin/api/users/{id}/password", admin.RequireAdmin(adminWebHandler.UpdateUserPassword))
 
 	// Swagger
 	mux.Handle("GET /swagger/", httpSwagger.Handler(
@@ -146,7 +147,7 @@ func main() {
 	))
 
 	wrapped := admin.SessionMiddleware(database)(
-		withLogging(withCORS(withNotFound(mux, webHandler))),
+		withRecovery(withLogging(withCORS(withNotFound(mux, webHandler)))),
 	)
 
 	server := &http.Server{
@@ -211,6 +212,18 @@ func withNotFound(next http.Handler, wh *web.Handler) http.Handler {
 		if rw.status == http.StatusNotFound {
 			wh.RenderError(w, 404, "Page not found", "The page you were looking for does not exist.")
 		}
+	})
+}
+
+func withRecovery(next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		defer func() {
+			if err := recover(); err != nil {
+				log.Printf("panic: %v", err)
+				http.Error(w, "Internal server error", http.StatusInternalServerError)
+			}
+		}()
+		next.ServeHTTP(w, r)
 	})
 }
 
