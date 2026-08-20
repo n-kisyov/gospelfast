@@ -119,6 +119,16 @@ const loginPageHTML = `<!DOCTYPE html>
 <html lang="en">
 <head>
     <meta charset="UTF-8">
+    <script>
+        // Match the theme chosen elsewhere in the app before first paint,
+        // so this page doesn't flash a light background (or ignore dark
+        // mode entirely) while the stylesheet/JS is still loading.
+        (function () {
+            if (localStorage.getItem('dark') === 'true') {
+                document.documentElement.classList.add('dark');
+            }
+        })();
+    </script>
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Gospelfast — Login</title>
     <link href="/static/css/tailwind.css" rel="stylesheet">
